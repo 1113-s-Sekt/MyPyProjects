@@ -31,6 +31,7 @@ class MyChessGame(QMainWindow):
         self.startButton.clicked.connect(start)
 
 
+print('Azat pidoras')
 
 if __name__ == "__main__":
     gameApp = QApplication(sys.argv)
