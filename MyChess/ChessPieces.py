@@ -36,9 +36,6 @@ class Piece(object):
     def __bool__(self):
         return True
 
-    def __del__(self):
-        print(f'{type(self)} is deleted.')
-
 
 class Pawn(Piece):
     def __init__(self, board, cell, color):
