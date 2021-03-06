@@ -164,7 +164,7 @@ class Board:
         except ValueError:
             print("Board.capture(move) is available only for capturing move, which contains 'x' as third element.")
 
-    def __pawn_permutation(self, move):
+    def pawn_permutation(self, move):
         cell1 = self.get_cell_by_notation(move[0])
         cell2 = self.get_cell_by_notation(move[1])
         piece1 = cell1.occupied
@@ -246,20 +246,20 @@ class Board:
                 cell3 = self.get_cell_by_notation(move[1][0] + move[0][1])
                 self.players[cell3.occupied.color].remove_piece(cell3.occupied)
                 self.__capture(move)
+            elif piece1.__class__.__name__ == 'Pawn':                                                                             # это временное решение, для консоли
+                if piece1.cell.position()[1] == 1 or piece1.cell.position()[1] == 8:
+                    #print('Pawn to ...?')
+                    #temp = input()
+                    #while temp not in ['Queen', 'Rook', 'Knight', 'Bishop']:
+                    #    print('Again pls, I dont understand')
+                    #    temp = input()
+                    #move.append(temp)
+                    move = self.pawn_permutation(move)
+                self.move_list.append(move)
             else:
                 return False
             piece1.turn += 1
             self.turn += 1
-            if piece1.__class__.__name__ == 'Pawn':                                                                             # это временное решение, для консоли
-                if piece1.cell.position()[1] == 1 or piece1.cell.position()[1] == 8:
-                    print('Pawn to ...?')
-                    temp = input()
-                    while temp not in ['Queen', 'Rook', 'Knight', 'Bishop']:
-                        print('Again pls, I dont understand')
-                        temp = input()
-                    move.append(temp)
-                    move = self.__pawn_permutation(move)
-            self.move_list.append(move)
 
     def reset_check(self):
         if self.someone_in_check:
