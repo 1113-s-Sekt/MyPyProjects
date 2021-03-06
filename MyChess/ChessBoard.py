@@ -1,4 +1,5 @@
 from ChessPieces import *
+from random import *
 
 Images = {'WhiteCell': 0, 'BlackCell': 0, 'Board': 0, 'Numbers': 0, 'Symbols': 0, 'Clocks': 0}
 Notation = {
@@ -58,9 +59,13 @@ def notation_to_xy(position):
 #       потом когда-нибудь поправлю везде это слово...
 #
 #
-
+game_mode_classic = 0
+game_mode_fisher = 1
+game_mode_custom = 2
+game_mode_continue = 3
 
 class Board:
+
     def __init__(self, game_mode):
         self.__name__ = 'Board'
         self.__width = 8
@@ -70,7 +75,7 @@ class Board:
         self.someone_in_check = False
         self.move_list = []         # в формате [ ['e2', 'e4'], ['d7', 'd5'], ['e4', 'd5', 'x', 'ссылка на фигуру']... ]
         self.cells = [Cell(self, i) for i in range(self.__width * self.__height)]
-        if self.mode == 'Classic':
+        if self.mode == game_mode_classic:
             for i in range(self.__width):
                 self.cells[8 + i].occupy(Pawn(self, self.cells[8 + i], 'White'))
                 self.cells[48 + i].occupy(Pawn(self, self.cells[48 + i], 'Black'))
@@ -99,13 +104,14 @@ class Board:
         self.player_white = Player(self, 'White')
         self.player_black = Player(self, 'Black')
         self.players = {'White': self.player_white, 'Black': self.player_black}
-        self.possible_moves = [self.player_white.possible_moves, self.player_black.possible_moves]    # ##############
 
-    def encryptionForsythEdwards(self) -> str:
+    def encryption_forsyth_edwards(self) -> str:     # зашифровывает текущую доску в нотацию Форсайта-Эдвардца
+        "Зашифровывает текущую доску в нотацию Форсайта-Эдвардца"
         code = ''
         return code
 
-    def decryptionForsythEdwards(self, code: str):
+    def decryption_forsyth_edwards(self, code: str):  # заполняет доску в соот-вии с ноатцией Ф.-Э.
+        "Заполняет доску в соот-вии с ноатцией Ф.-Э."
 
         return True
 
@@ -305,14 +311,14 @@ class Board:
                         cell.attacked[ind] += 1
                         figure.add_available_cells(cell)
                         dude = self.cells[self.xy_to_index([piece_xy[0] - 1, piece_xy[1] + direction])].occupied
-                        if dude.__class__.__name__ == 'King' and dude.color != figure.color:
+                        if isinstance(dude, King) and dude.color != figure.color:
                             dude.check_by(figure)
                     if piece_xy[0] < 7:
                         cell = self.cells[self.xy_to_index([piece_xy[0] + 1, piece_xy[1] + direction])]
                         cell.attacked[ind] += 1
                         figure.add_available_cells(cell)
                         dude = self.cells[self.xy_to_index([piece_xy[0] + 1, piece_xy[1] + direction])].occupied
-                        if dude.__class__.__name__ == 'King' and dude.color != figure.color:
+                        if isinstance(dude, King) and dude.color != figure.color:
                             dude.check_by(figure)
                     if self.cells[self.xy_to_index([piece_xy[0], piece_xy[1] + direction])].occupied == 0:
                         figure.add_available_cells(self.cells[self.xy_to_index([piece_xy[0], piece_xy[1] + direction])])
@@ -336,7 +342,7 @@ class Board:
                             cell.attacked[ind] += 1
                             figure.add_available_cells(cell)
                             dude = cell.occupied
-                            if dude.__class__.__name__ == 'King' and dude.color != figure.color:
+                            if isinstance(dude, King) and dude.color != figure.color:
                                 dude.check_by(figure)
                     continue
                 vector = []
@@ -357,7 +363,7 @@ class Board:
                         i += 1
                         if dude == 0:
                             continue
-                        elif dude.__class__.__name__ == 'King' and dude.color != figure.color:
+                        elif isinstance(dude, King) and dude.color != figure.color:
                             dude.check_by(figure)
                             continue
                         else:
@@ -391,7 +397,7 @@ class Board:
             cells_we_can_stand_on = set(cells_we_can_stand_on)        # добавляем клетку атакующего, её можно атаковать
             if king.cell.attacked[{'White': 1, 'Black': 0}[king.color]] == 1:
                 for figure in player.pieces:
-                    if figure.__class__.__name__ == 'Pawn' or figure.__class__.__name__ == 'King':
+                    if isinstance(figure, Pawn) or isinstance(figure, King):
                         continue                                # пешку рассматриваем отдельно (passant-check, etc.)
                     figure.available_cells.remove(figure.cell)  # у наших фигур убираем клетки на которой они стоят
                     # далее из пересечения этих клеток и клеток, доступных нашей фигуре(K, Q, R, B, not P) делаем ходы
@@ -404,7 +410,7 @@ class Board:
                         else:
                             player.add_possible_moves([figure.cell.position(), cell.position(), 'x'])
                 for figure in player.pieces:    # а теперь начинает ебаный ад. Рассматриваем пешки....
-                    if figure.__class__.__name__ == 'Pawn':
+                    if isinstance(figure, Pawn):
                         figure.available_cells.remove(figure.cell)
                         for cell in figure.available_cells.intersection(cells_we_can_stand_on):
                             if cell.position()[0] != figure.cell.position()[0]:
@@ -419,7 +425,7 @@ class Board:
                         # В 99.9999% случаев не дойдёт даже до проверки 3го условия
                         if len(self.move_list[-1]) < 2:
                             continue
-                        if attacker.__class__.__name__ == 'Pawn' and self.move_list[-1][1] == attacker.cell.position():
+                        if isinstance(attacker, Pawn) and self.move_list[-1][1] == attacker.cell.position():
                             if attacker.turn == 1 and \
                                     abs(int(self.move_list[-1][0][1]) - int(self.move_list[-1][1][1])) == 2:
                                 if attacker.cell.position()[0] == figure.cell.position()[0]:
@@ -436,7 +442,7 @@ class Board:
         # если на пути встречается союзная фигура, а за ней вражеская нужного типа - то союзная привязывается
         king = False    # для начала неплохо отыскать короля бы >_<
         for figure in player.pieces:    # в будущем неплохо бы сохранять ссылку на короля у самого игрока, или типо того
-            if figure.__class__.__name__ == 'King':
+            if isinstance(figure, King):
                 king = figure
         king_xy = notation_to_xy(king.cell.position())
         vector = [[1, 1], [1, 0], [1, -1], [0, -1], [-1, -1], [-1, 0], [-1, 1], [0, 1]]
@@ -477,28 +483,28 @@ class Board:
                     if clr == 'White':
                         dude = self.cells[0].occupied
                         if dude != 0:
-                            if dude.turn == 0 and dude.__class__.__name__ == 'Rook' and dude.color == clr:
+                            if dude.turn == 0 and isinstance(dude, Rook) and dude.color == clr:
                                 if self.cells[1].attacked[attack] == 0 and not bool(self.cells[1].occupied) \
                                         and self.cells[2].attacked[attack] == 0 and not bool(self.cells[2].occupied)\
                                         and self.cells[3].attacked[attack] == 0 and not bool(self.cells[3].occupied):
                                     player.add_possible_moves(['0-0-0'])
                         dude = self.cells[7].occupied
                         if dude != 0:
-                            if dude.turn == 0 and dude.__class__.__name__ == 'Rook' and dude.color == clr:
+                            if dude.turn == 0 and isinstance(dude, Rook) and dude.color == clr:
                                 if self.cells[5].attacked[attack] == 0 and not bool(self.cells[5].occupied) \
                                         and self.cells[6].attacked[attack] == 0 and not bool(self.cells[6].occupied):
                                     player.add_possible_moves(['0-0'])
                     elif clr == 'Black':
                         dude = self.cells[56].occupied
                         if dude != 0:
-                            if dude.turn == 0 and dude.__class__.__name__ == 'Rook' and dude.color == clr:
+                            if dude.turn == 0 and isinstance(dude, Rook) and dude.color == clr:
                                 if self.cells[57].attacked[attack] == 0 and not bool(self.cells[57].occupied) \
                                         and self.cells[58].attacked[attack] == 0 and not bool(self.cells[58].occupied) \
                                         and self.cells[59].attacked[attack] == 0 and not bool(self.cells[59].occupied):
                                     player.add_possible_moves(['0-0-0'])
                         dude = self.cells[63].occupied
                         if dude != 0:
-                            if dude.turn == 0 and dude.__class__.__name__ == 'Rook' and dude.color == clr:
+                            if dude.turn == 0 and isinstance(dude, Rook) and dude.color == clr:
                                 if self.cells[61].attacked[attack] == 0 and not bool(self.cells[61].occupied) \
                                         and self.cells[62].attacked[attack] == 0 and not bool(self.cells[62].occupied):
                                     player.add_possible_moves(['0-0'])
@@ -547,7 +553,7 @@ class Board:
                                     continue
                                 lmv = self.move_list[-1]
                                 temp = self.get_cell_by_notation(self.move_list[-1][1]).occupied
-                                if temp.__class__.__name__ == 'Pawn' and temp.cell.position()[0] == cell.position()[0]:
+                                if isinstance(temp, Pawn) and temp.cell.position()[0] == cell.position()[0]:
                                     if temp.turn == 1 and abs(int(lmv[0][1]) - int(lmv[1][1])) == 2:
                                         if temp.cell.position()[1] == figure.cell.position()[1]:
                                             pos = lmv[0][0] + str((int(lmv[0][1]) + int(lmv[1][1])) // 2)
@@ -592,6 +598,35 @@ class Board:
                                             player.add_possible_moves([figure.cell.position(), pos, 'passant'])
                             elif dude.color != mvr_clr:
                                 player.add_possible_moves([figure.cell.position(), cell.position(), 'x'])
+
+    def clear_board(self):
+        self.move_list = []
+        for cell in self.cells:
+            cell.occupied = 0
+        for player in self.players:
+            player.pieces = []
+        self.turn = 0
+        self.someone_in_check = False
+        self.player_white = 0
+        self.player_black = 0
+
+    def fill_board(self, mode):
+        code = 0
+        if mode == game_mode_classic:
+            code = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1'
+        elif mode == game_mode_fisher:
+            posb = ['r', 'r', 'n', 'n', 'b', 'b', 'q', 'k']
+            shuffle(posb)
+            posb = ''.join(posb)
+            posw = posb.upper()
+            code = posb + '/pppppppp/8/8/8/8/PPPPPPPP/' + posw + ' w ???? - 0 1'
+        elif mode == game_mode_continue:
+            code = open('saves/lastgame.txt').read()
+        elif mode == game_mode_custom:
+            pass
+        self.decryption_forsyth_edwards(code)
+        self.player_white = Player(self, 'White')
+        self.player_black = Player(self, 'Black')
 
     def __history_back(self, move):
         pass

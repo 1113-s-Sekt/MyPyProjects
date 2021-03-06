@@ -1,6 +1,6 @@
 from ChessBoard import *
 
-b = Board('Classic')
+b = Board(game_mode_classic)
 print(b, 'Start of the Game')
 no_checkmate = True
 white = b.player_white

@@ -9,7 +9,7 @@ class MainWindow(QWidget):
     def __init__(self):
         super().__init__()
         self.state = 0
-        self.Board = Board('Classic')
+        self.Board = Board(game_mode_classic)
         self.Board.look_for_cells_are_attacked()
         self.Board.move_creator()
         self.cell_active = 0
@@ -173,7 +173,7 @@ mainW = MainWindow()
 def new_game():
     mainW.state = 1
     mainW.change = 1
-    mainW.Board = Board('Classic')
+    mainW.Board = Board(game_mode_classic)
     mainW.Board.look_for_cells_are_attacked()
     mainW.Board.move_creator()
     btn1.hide()

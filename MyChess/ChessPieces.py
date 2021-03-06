@@ -1,7 +1,9 @@
 from PyQt5.QtCore import QRect
 from PyQt5.QtGui import QImage
 
-class Piece:
+
+class Piece(object):
+    "Класс шахматных фигур. Обладает цветом, соответствующей фигуре клеткой на доске, ссылкой на эту доску, etc."
     def __init__(self, board, cell, color):
         self.color = color
         self.cell = cell
@@ -33,6 +35,9 @@ class Piece:
 
     def __bool__(self):
         return True
+
+    def __del__(self):
+        print(f'{type(self)} is deleted.')
 
 
 class Pawn(Piece):
@@ -162,5 +167,8 @@ class VoidPiece(Piece):
         self.color = None
 '''
 
-if __name__ == 'main':
-    pass
+
+if __name__ == '__main__':
+    print(Piece.__doc__)
+    print(Piece.__dict__['__dict__'])
+    print(Pawn.__dict__)
