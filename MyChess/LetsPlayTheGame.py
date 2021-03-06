@@ -17,6 +17,7 @@ while no_checkmate:
         print(f'{ {1: white, 0: black}[b.turn % 2] } won the Game, congratulations!')
         continue
     print(f'{player.color} to move')
+    print(b.encryption_forsyth_edwards())
     offered_move = input().split()
     while offered_move not in player.possible_moves:
         print(f'{ offered_move } is not available move, try again:')

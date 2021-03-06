@@ -1,14 +1,10 @@
 from ChessPieces import *
-from random import *
+from random import shuffle, randint, choice
 
 Images = {'WhiteCell': 0, 'BlackCell': 0, 'Board': 0, 'Numbers': 0, 'Symbols': 0, 'Clocks': 0}
 Notation = {
     'a': 0, 'b': 1, 'c': 2, 'd': 3, 'e': 4, 'f': 5, 'g': 6, 'h': 7, 'i': 8, 'j': 9, 'k': 10        # etc.
 }
-
-
-def notation_to_xy(position):
-    return [Notation[position[0]], (int(position[1]) - 1)]
 
 # Ходы записываются в формате:
 # [ ['e2', 'e4'], ['d7', 'd5'], ['e4', 'd5', 'x', 'ссылка на фигуру']... ]
@@ -58,11 +54,53 @@ def notation_to_xy(position):
 #       Почему для слова "клетка(поле)" используется слово "cell", а не "field" - ответа дать нельзя,
 #       потом когда-нибудь поправлю везде это слово...
 #
+#   !!! Изменения в нотации Ф.-Э.:
+#       'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w SLsl .. 0 0' - классическая партия
+#       1) Рокировки обозначаются не KQkq а SLsl (SHORT, LONG, short, long)
+#       2) Если прошлый ход не был двойной ход пешкой, то ставится не '-' а '..' для отличия от других символов в строке
+#               и фиксированной длительности задней части строки
 #
+#
+
+
 game_mode_classic = 0
 game_mode_fisher = 1
 game_mode_custom = 2
 game_mode_continue = 3
+
+
+def notation_to_xy(position):
+    return [Notation[position[0]], (int(position[1]) - 1)]
+
+
+def create_fisher_pos():
+    k = randint(1, 6)
+    posblack = ['' for i in range(8)]
+    posblack[k] = 'k'                               # Поставили короля на случайное место [False, ..., 'k', ..., False]
+    posblack[randint(0, k - 1)] = 'r'               # Поствили одна ладью слева, другую справа от короля рандомно
+    posblack[randint(k + 1, 7)] = 'r'
+    r = randint(1, 8)
+    while bool(posblack[r]):                        # Поставили на первый пустой слот одного слона
+        r = randint(1, 8)
+    posblack[r] = 'b'
+    k = randint(1, 8)
+    while bool(posblack[k]) or bool(k + r % 2):     # Ставим след. слона в пустой слот так, чтобы он был другой четности
+        k = randint(1, 8)                           # До слонов было заполнено только 3 клетки, так что 100% есть клетки
+    posblack[k] = 'b'                               # пустые и разной чётности
+    free_pos = []
+    for kekw in range(8):                           # Ищем все пустые поля
+        if not bool(posblack[kekw]):
+            free_pos.append(kekw)
+    k = choice(free_pos)
+    posblack[k] = 'q'                               # Ставим в рандомное ферзя
+    free_pos.remove(k)
+    posblack[free_pos[0]] = 'n'                     # Оставшиеся два заполняем конями
+    posblack[free_pos[1]] = 'n'
+    posblack = ''.join(posblack)
+    poswhite = posblack.upper()
+    code = posblack + '/pppppppp/8/8/8/8/PPPPPPPP/' + poswhite + ' w SLsl .. 0 1'
+    return code
+
 
 class Board:
 
@@ -71,6 +109,7 @@ class Board:
         self.__width = 8
         self.__height = 8
         self.turn = 0
+        self.half_turn = 0       # Полуходы - ходы без движения пешек и взятия фигур. Если >=50 то объявляется НИЧЬЯ
         self.mode = game_mode
         self.someone_in_check = False
         self.move_list = []         # в формате [ ['e2', 'e4'], ['d7', 'd5'], ['e4', 'd5', 'x', 'ссылка на фигуру']... ]
@@ -107,7 +146,65 @@ class Board:
 
     def encryption_forsyth_edwards(self) -> str:     # зашифровывает текущую доску в нотацию Форсайта-Эдвардца
         "Зашифровывает текущую доску в нотацию Форсайта-Эдвардца"
-        code = ''
+        dict = {Rook: 'r', Bishop: 'b', Knight: 'n', Queen: 'q', King: 'k', Pawn: 'p'}
+        code = []
+        w = self.__width
+        h = self.__height
+        for y in range(h - 1, -1, -1):
+            j = 0
+            for x in range(w):
+                cell = self.cells[y * w + x]
+                dude = cell.occupied
+                if dude != 0:
+                    if bool(j):
+                        code.append(str(j))
+                        j = 0
+                    code.append(dict[dude.__class__])
+                else:
+                    j += 1
+                    continue
+                if dude.color == 'White':
+                    code[-1] = code[-1].upper()
+            if bool(j):
+                code.append(str(j))
+            code.append('/')
+        code.pop()
+        code.append({0: ' w ', 1: ' b '}[self.turn % 2])
+        king = 0
+        for player in [self.player_white, self.player_black]:
+            clr = player.color
+            for figure in player.pieces:
+                if isinstance(figure, King):
+                    king = figure
+            if king.turn != 0:
+                code.append('--')
+            else:
+                dude = self.cells[{'White': 7, 'Black': 63}[clr]].occupied
+                if isinstance(dude, Rook) and not bool(dude.turn):
+                    code.append('s')                                    # l means "long", s means "short" castles
+                    if clr == 'White':
+                        code[-1] = code[-1].upper()
+                else:
+                    code.append('-')
+                dude = self.cells[{'White': 0, 'Black': 56}[clr]].occupied
+                if isinstance(dude, Rook) and not bool(dude.turn):
+                    code.append('l')
+                    if clr == 'White':
+                        code[-1] = code[-1].upper()
+                else:
+                    code.append('-')
+        if len(self.move_list) > 0:
+            lmv = self.move_list[-1]                        # if: 'en passant' possible - there
+            cell2 = self.get_cell_by_notation(lmv[1])       # is a cell to attack like 'e3'
+            if abs(int(lmv[0][1]) - int(lmv[1][1])) == 2 and isinstance(cell2.occupied, Pawn):
+                cll = ' ' + lmv[0][0] + str((int(lmv[0][1]) + int(lmv[1][1])) // 2)
+                code.append(cll)
+            else:                                           # else: '..'
+                code.append(' ..')
+        else:
+            code.append(' ..')
+        code.append(f' {self.half_turn} {self.turn // 2 + 1}')
+        code = ''.join(code)
         return code
 
     def decryption_forsyth_edwards(self, code: str):  # заполняет доску в соот-вии с ноатцией Ф.-Э.
@@ -171,38 +268,33 @@ class Board:
             raise ValueError(print("Board.capture(move) is available only for capturing move, "
                                    "which contains 'x' as third element."))
 
-    def __pawn_permutation(self, move):
-        cell1 = self.get_cell_by_notation(move[0])
-        cell2 = self.get_cell_by_notation(move[1])
-        piece1 = cell1.occupied
+    def pawn_permutation(self, move):
+        cell1 = self.get_cell_by_notation(move[1])  # ['e7', 'e8', 'Queen'] or:
+        piece1 = cell1.occupied                     # ['e7', 'e8', 'x', <ссылка на съеденную фигуру>, 'Queen']
         color1 = piece1.color
         if move[-1] == 'Queen':  # превращение пешки в ферзя
-            self.__step(move)
-            move.append(piece1)
-            cell2.occupy(Queen(self, cell2, color1))
-            move[2] = cell2.occupied
-            self.players[color1].add_piece(cell2.occupied)
-            self.players[color1].remove_piece(piece1)
+            move.append(piece1)                        # ['e7', 'e8', 'Queen', <ссылка на пешку>] or:
+            cell1.occupy(Queen(self, cell1, color1))   # ['e7', 'e8', 'x', <ссыл на съед ф>, 'Queen', <ссылка на пешку>]
+            move.append(cell1.occupied)                # ['e7', 'e8', 'Queen', <ссылка на пешку>, <ссылка на ферзя>] or:
+            self.players[color1].add_piece(cell1.occupied)  # ['e7', 'e8', 'x', <ссыл на съед ф>,
+            self.players[color1].remove_piece(piece1)       # 'Queen', <ссылка на пешку>, <ссылка на ферзя>]
         elif move[-1] == 'Rook':  # превращение пешки в ладью
-            self.__step(move)
             move.append(piece1)
-            cell2.occupy(Rook(self, cell2, color1))
-            move[2] = cell2.occupied
-            self.players[color1].add_piece(cell2.occupied)
+            cell1.occupy(Rook(self, cell1, color1))
+            move.append(cell1.occupied)
+            self.players[color1].add_piece(cell1.occupied)
             self.players[color1].remove_piece(piece1)
         elif move[-1] == 'Bishop':  # превращение пешки в слона
-            self.__step(move)
             move.append(piece1)
-            cell2.occupy(Bishop(self, cell2, color1))
-            move[2] = cell2.occupied
-            self.players[color1].add_piece(cell2.occupied)
+            cell1.occupy(Bishop(self, cell1, color1))
+            move.append(cell1.occupied)
+            self.players[color1].add_piece(cell1.occupied)
             self.players[color1].remove_piece(piece1)
         elif move[-1] == 'Knight':  # превращение пешки в коня
-            self.__step(move)
             move.append(piece1)
-            cell2.occupy(Knight(self, cell2, color1))
-            move[2] = cell2.occupied
-            self.players[color1].add_piece(cell2.occupied)
+            cell1.occupy(Knight(self, cell1, color1))
+            move.append(cell1.occupied)
+            self.players[color1].add_piece(cell1.occupied)
             self.players[color1].remove_piece(piece1)
         return move
 
@@ -225,6 +317,7 @@ class Board:
                 else:
                     return False
                 self.turn += 1
+                self.half_turn += 1
                 self.move_list.append(move)
                 return True
             elif move[0] == '0-0':  # ход "короткая рокировка"
@@ -239,20 +332,28 @@ class Board:
                 else:
                     return False
                 self.turn += 1
+                self.half_turn += 1
                 self.move_list.append(move)
                 return True
             cell1 = self.get_cell_by_notation(move[0])
             piece1 = cell1.occupied
             if len(move) == 2:                                                      # обычный ход
                 self.__step(move)
+                self.half_turn += 1
+                if isinstance(piece1, Pawn):
+                    self.half_turn = 0
             elif move[-1] == 'x':                                                   # ход "взятие вражеской фигуры"
                 cell2 = self.get_cell_by_notation(move[1])
+                move.append(cell2.occupied)
                 self.players[cell2.occupied.color].remove_piece(cell2.occupied)
                 self.__capture(move)
+                self.half_turn = 0
             elif move[-1] == 'passant':                                             # ход "взятие на проходе"
                 cell3 = self.get_cell_by_notation(move[1][0] + move[0][1])
+                move.append(cell3.occupied)
                 self.players[cell3.occupied.color].remove_piece(cell3.occupied)
                 self.__capture(move)
+                self.half_turn = 0
             else:
                 return False
             piece1.turn += 1
@@ -265,7 +366,7 @@ class Board:
                         print('Again pls, I dont understand')
                         temp = input()
                     move.append(temp)
-                    move = self.__pawn_permutation(move)
+                    move = self.pawn_permutation(move)
             self.move_list.append(move)
 
     def reset_check(self):
@@ -606,6 +707,7 @@ class Board:
         for player in self.players:
             player.pieces = []
         self.turn = 0
+        self.half_turn = 0
         self.someone_in_check = False
         self.player_white = 0
         self.player_black = 0
@@ -613,13 +715,9 @@ class Board:
     def fill_board(self, mode):
         code = 0
         if mode == game_mode_classic:
-            code = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1'
+            code = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w SLsl .. 0 1'
         elif mode == game_mode_fisher:
-            posb = ['r', 'r', 'n', 'n', 'b', 'b', 'q', 'k']
-            shuffle(posb)
-            posb = ''.join(posb)
-            posw = posb.upper()
-            code = posb + '/pppppppp/8/8/8/8/PPPPPPPP/' + posw + ' w ???? - 0 1'
+            code = create_fisher_pos()
         elif mode == game_mode_continue:
             code = open('saves/lastgame.txt').read()
         elif mode == game_mode_custom:
@@ -743,4 +841,14 @@ class Player:
                     self.possible_moves.append([, ])
         '''
 
+# _____________________________________________________________________________________________________________________
+# _____________________________________________________________________________________________________________________
 
+
+if __name__ == '__main__':
+    b = Board(game_mode_classic)
+    b.look_for_cells_are_attacked()
+    b.move_creator()
+    b.move(['e2', 'e4'])
+    code = b.encryption_forsyth_edwards()
+    print(code)
