@@ -71,6 +71,19 @@ class MainWindow(QWidget):
     def mousePressEvent(self, event):
         if self.state == 0:
             return None
+        if self.Board.permutation:
+            px, py = event.pos().x(), event.pos().y()
+            if px in range(92, 172) and py in range(260, 340):
+                self.move_to_permutate.append('Knight')
+            elif px in range(204, 284) and py in range(260, 340):
+                self.move_to_permutate.append('Bishop')
+            elif px in range(316, 396) and py in range(260, 340):
+                self.move_to_permutate.append('Rook')
+            elif px in range(428, 508) and py in range(260, 340):
+                self.move_to_permutate.append('Queen')
+
+
+
         if self.ask_to_permutation:
             px, py = event.pos().x(), event.pos().y()
             if px in range(92, 172) and py in range(260, 340):

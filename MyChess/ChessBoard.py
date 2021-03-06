@@ -112,6 +112,7 @@ class Board:
         self.half_turn = 0       # Полуходы - ходы без движения пешек и взятия фигур. Если >=50 то объявляется НИЧЬЯ
         self.mode = game_mode
         self.someone_in_check = False
+        self.permutation = False
         self.move_list = []         # в формате [ ['e2', 'e4'], ['d7', 'd5'], ['e4', 'd5', 'x', 'ссылка на фигуру']... ]
         self.cells = [Cell(self, i) for i in range(self.__width * self.__height)]
         if self.mode == game_mode_classic:
@@ -268,7 +269,8 @@ class Board:
             raise ValueError(print("Board.capture(move) is available only for capturing move, "
                                    "which contains 'x' as third element."))
 
-    def pawn_permutation(self, move):
+    def pawn_permutation(self, move, to_whom):
+        move.append(to_whom)
         cell1 = self.get_cell_by_notation(move[1])  # ['e7', 'e8', 'Queen'] or:
         piece1 = cell1.occupied                     # ['e7', 'e8', 'x', <ссылка на съеденную фигуру>, 'Queen']
         color1 = piece1.color
@@ -277,7 +279,7 @@ class Board:
             cell1.occupy(Queen(self, cell1, color1))   # ['e7', 'e8', 'x', <ссыл на съед ф>, 'Queen', <ссылка на пешку>]
             move.append(cell1.occupied)                # ['e7', 'e8', 'Queen', <ссылка на пешку>, <ссылка на ферзя>] or:
             self.players[color1].add_piece(cell1.occupied)  # ['e7', 'e8', 'x', <ссыл на съед ф>,
-            self.players[color1].remove_piece(piece1)       # 'Queen', <ссылка на пешку>, <ссылка на ферзя>]
+            self.players[color1].remove_piece(piece1)              # 'Queen', <ссылка на пешку>, <ссылка на ферзя>]
         elif move[-1] == 'Rook':  # превращение пешки в ладью
             move.append(piece1)
             cell1.occupy(Rook(self, cell1, color1))
@@ -296,6 +298,10 @@ class Board:
             move.append(cell1.occupied)
             self.players[color1].add_piece(cell1.occupied)
             self.players[color1].remove_piece(piece1)
+        else:
+            return False
+        self.move_list.append(move)
+        self.permutation = False
         return move
 
     def move(self, move):                             # не проверяет легитимность хода, просто аппарат его совершения
@@ -358,15 +364,10 @@ class Board:
                 return False
             piece1.turn += 1
             self.turn += 1
-            if piece1.__class__.__name__ == 'Pawn':                                                                             # это временное решение, для консоли
+            if isinstance(piece1, Pawn):  # Поднимаем флажок превращения пешки, потом по флажку обращаемся к интерфейсу
                 if piece1.cell.position()[1] == 1 or piece1.cell.position()[1] == 8:
-                    print('Pawn to ...?')
-                    temp = input()
-                    while temp not in ['Queen', 'Rook', 'Knight', 'Bishop']:
-                        print('Again pls, I dont understand')
-                        temp = input()
-                    move.append(temp)
-                    move = self.pawn_permutation(move)
+                    self.permutation = True
+                    return True
             self.move_list.append(move)
 
     def reset_check(self):
