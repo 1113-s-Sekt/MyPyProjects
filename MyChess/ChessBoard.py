@@ -162,7 +162,8 @@ class Board:
                 print("It's not a capturing move")
                 return False
         except ValueError:
-            print("Board.capture(move) is available only for capturing move, which contains 'x' as third element.")
+            raise ValueError(print("Board.capture(move) is available only for capturing move, "
+                                   "which contains 'x' as third element."))
 
     def __pawn_permutation(self, move):
         cell1 = self.get_cell_by_notation(move[0])
@@ -671,7 +672,7 @@ class Player:
             self.pieces.remove(piece)
             return self.pieces
         except ValueError:
-            print('Impossible to remove a non-existing piece')
+            raise ValueError(print('Impossible to remove a non-existing piece'))
 
     def reset_possible_moves(self):
         self.possible_moves = []
