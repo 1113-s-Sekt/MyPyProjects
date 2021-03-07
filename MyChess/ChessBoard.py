@@ -64,9 +64,11 @@ Notation = {
 
 
 game_mode_classic = 0
+game_mode_classic_fe_notation = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w SLsl .. 0 1'
 game_mode_fisher = 1
 game_mode_custom = 2
 game_mode_continue = 3
+save_file = 'saves/lastgame.txt'
 
 
 def notation_to_xy(position):
@@ -79,15 +81,14 @@ def create_fisher_pos():
     posblack[k] = 'k'                               # Поставили короля на случайное место [False, ..., 'k', ..., False]
     posblack[randint(0, k - 1)] = 'r'               # Поствили одна ладью слева, другую справа от короля рандомно
     posblack[randint(k + 1, 7)] = 'r'
-    r = randint(1, 8)
+    r = randint(0, 7)
     while bool(posblack[r]):                        # Поставили на первый пустой слот одного слона
-        r = randint(1, 8)
+        r = randint(0, 7)
     posblack[r] = 'b'
-    k = randint(1, 8)
-    while bool(posblack[k]) or bool(k + r % 2):     # Ставим след. слона в пустой слот так, чтобы он был другой четности
-        k = randint(1, 8)                           # До слонов было заполнено только 3 клетки, так что 100% есть клетки
-    posblack[k] = 'b'                               # пустые и разной чётности
-    free_pos = []
+    while bool(posblack[k]) or not bool((k + r) % 2):
+        k = randint(0, 7)                           # Ставим след. слона в пустой слот так, чтобы он был другой четности
+    posblack[k] = 'b'                               # До слонов было заполнено только 3 клетки, так что 100% есть клетки
+    free_pos = []                                   # пустые и разной чётности
     for kekw in range(8):                           # Ищем все пустые поля
         if not bool(posblack[kekw]):
             free_pos.append(kekw)
@@ -115,7 +116,8 @@ class Board:
         self.permutation = False
         self.move_list = []         # в формате [ ['e2', 'e4'], ['d7', 'd5'], ['e4', 'd5', 'x', 'ссылка на фигуру']... ]
         self.cells = [Cell(self, i) for i in range(self.__width * self.__height)]
-        if self.mode == game_mode_classic:
+        self.fill_board(self.mode)
+        '''if self.mode == game_mode_classic:
             for i in range(self.__width):
                 self.cells[8 + i].occupy(Pawn(self, self.cells[8 + i], 'White'))
                 self.cells[48 + i].occupy(Pawn(self, self.cells[48 + i], 'Black'))
@@ -142,11 +144,12 @@ class Board:
         # elif self.mode.__name__ = 'Board':
 
         self.player_white = Player(self, 'White')
-        self.player_black = Player(self, 'Black')
+        self.player_black = Player(self, 'Black')'''
+
         self.players = {'White': self.player_white, 'Black': self.player_black}
 
-    def encryption_forsyth_edwards(self) -> str:     # зашифровывает текущую доску в нотацию Форсайта-Эдвардца
-        "Зашифровывает текущую доску в нотацию Форсайта-Эдвардца"
+    def encryption_forsyth_edwards(self) -> str:     # зашифровывает текущую доску в нотацию Форсайта-Эдвардса
+        "Зашифровывает текущую доску в нотацию Форсайта-Эдвардса"
         dict = {Rook: 'r', Bishop: 'b', Knight: 'n', Queen: 'q', King: 'k', Pawn: 'p'}
         code = []
         w = self.__width
@@ -209,9 +212,36 @@ class Board:
         return code
 
     def decryption_forsyth_edwards(self, code: str):  # заполняет доску в соот-вии с ноатцией Ф.-Э.
-        "Заполняет доску в соот-вии с ноатцией Ф.-Э."
-
-        return True
+        piece_dict = {
+            'r': Rook, 'R': Rook,
+            'n': Knight, 'N': Knight,
+            'b': Bishop, 'B': Bishop,
+            'q': Queen, 'Q': Queen,
+            'k': King, 'K': King,
+            'p': Pawn, 'P': Pawn
+        }
+        nums = ['1', '2', '3', '4', '5', '6', '7', '8']
+        index = 56  # Индекс клетки, а не итерации по строке code
+        j = 0
+        while code[j] != ' ':
+            if code[j] == '/':
+                index -= 16
+                j += 1
+                continue
+            elif code[j] in nums:
+                index += int(code[j])
+            else:
+                clr = {True: 'White', False: 'Black'}[code[j].upper() == code[j]]
+                self.cells[index].occupy(piece_dict[code[j]](self, self.cells[index], clr))
+                index += 1
+            j += 1
+        self.turn = (int(code[-1]) - 1) * 2 + {'w': 0, 'b': 1}[code[-13]]
+        self.half_turn = int(code[-3])
+        castles = []
+        for j in range(4):
+            if code[-8 - j] != '-':
+                castles.append(code[-8 - j])
+        return castles
 
     def width(self):
         return self.__width
@@ -394,7 +424,7 @@ class Board:
                 elif dude == piece2:
                     cells_between = temp
                     return cells_between
-        return None
+        return cells_between
 
     def look_for_cells_are_attacked(self):      # смотрим какие клетки атакуются и какие клетки "(псевдо)доступны"
         self.reset_check()
@@ -444,7 +474,9 @@ class Board:
                             cell.attacked[ind] += 1
                             figure.add_available_cells(cell)
                             dude = cell.occupied
-                            if isinstance(dude, King) and dude.color != figure.color:
+                            if dude == 0:
+                                pass
+                            elif isinstance(dude, King) and dude.color != figure.color:
                                 dude.check_by(figure)
                     continue
                 vector = []
@@ -464,10 +496,9 @@ class Board:
                         dude = cell.occupied
                         i += 1
                         if dude == 0:
-                            continue
+                            pass
                         elif isinstance(dude, King) and dude.color != figure.color:
                             dude.check_by(figure)
-                            continue
                         else:
                             break
 
@@ -716,11 +747,11 @@ class Board:
     def fill_board(self, mode):
         code = 0
         if mode == game_mode_classic:
-            code = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w SLsl .. 0 1'
+            code = game_mode_classic_fe_notation
         elif mode == game_mode_fisher:
             code = create_fisher_pos()
         elif mode == game_mode_continue:
-            code = open('saves/lastgame.txt').read()
+            code = open(save_file).read()
         elif mode == game_mode_custom:
             pass
         self.decryption_forsyth_edwards(code)
@@ -847,9 +878,4 @@ class Player:
 
 
 if __name__ == '__main__':
-    b = Board(game_mode_classic)
-    b.look_for_cells_are_attacked()
-    b.move_creator()
-    b.move(['e2', 'e4'])
-    code = b.encryption_forsyth_edwards()
-    print(code)
+    pass

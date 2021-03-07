@@ -9,7 +9,7 @@ class MainWindow(QWidget):
     def __init__(self):
         super().__init__()
         self.state = 0
-        self.Board = Board(game_mode_classic)
+        self.Board = Board(game_mode_fisher)
         self.Board.look_for_cells_are_attacked()
         self.Board.move_creator()
         self.cell_active = 0
@@ -66,7 +66,7 @@ class MainWindow(QWidget):
                         painter.drawImage(QRect(204, 260, 80, 80), QImage("Pictures/wikipedia/bB.png"))
                         painter.drawImage(QRect(316, 260, 80, 80), QImage("Pictures/wikipedia/bR.png"))
                         painter.drawImage(QRect(428, 260, 80, 80), QImage("Pictures/wikipedia/bQ.png"))
-                print("End of update")
+                # print("End of update")
 
     def mousePressEvent(self, event):
         if self.state == 0:
@@ -102,25 +102,25 @@ class MainWindow(QWidget):
             self.ask_to_permutation = False
             self.change = 1
         else:
-            print(event)
+            # print(event)
             px, py = event.pos().x(), event.pos().y()
             if px in range(20, 596) and py in range(10, 570):
                 x = (px-20)//72
                 y = (py-10)//70
-                print(x, y)
+                # print(x, y)
                 cellEnt = self.Board.get_cell_by_notation("abcdefgh"[x] + "12345678"[7-y])
                 self.change = 1
-                print(cellEnt.position())
-                print(cellEnt.occupied)
+                # print(cellEnt.position())
+                # print(cellEnt.occupied)
                 if self.cell_active == 0:
                     if cellEnt.occupied != 0 and cellEnt.occupied.color == ['White', 'Black'][self.Board.turn % 2]:
                         self.cell_active = cellEnt
                         self.cells_to_move = []
                         self.cells_to_passant = []
                         self.cells_to_rocky = []
-                        print(self.cell_active)
+                        # print(self.cell_active)
                         for move in self.Board.players[['White', 'Black'][self.Board.turn % 2]].possible_moves:
-                            print(move)
+                            # print(move)
                             if cellEnt.position() == move[0]:
                                 cell2 = self.Board.get_cell_by_notation(move[1])
                                 if len(move) == 3 and move[2] == 'passant' and str(cellEnt) in ['♟', '♙']:
@@ -137,7 +137,7 @@ class MainWindow(QWidget):
                                     self.cells_to_rocky.append(self.Board.get_cell_by_notation("c1"))
                                 else:
                                     self.cells_to_rocky.append(self.Board.get_cell_by_notation("c8"))
-                        print(self.cells_to_move)
+                        # print(self.cells_to_move)
                     else:
                         self.cells_to_move = []
                         self.cells_to_passant = []
@@ -223,7 +223,7 @@ mainW = MainWindow()
 def new_game():
     mainW.state = 1
     mainW.change = 1
-    mainW.Board = Board(game_mode_classic)
+    mainW.Board = Board(game_mode_fisher)
     mainW.Board.look_for_cells_are_attacked()
     mainW.Board.move_creator()
     btn1.hide()
