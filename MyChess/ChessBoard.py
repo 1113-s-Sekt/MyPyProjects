@@ -117,35 +117,6 @@ class Board:
         self.move_list = []         # в формате [ ['e2', 'e4'], ['d7', 'd5'], ['e4', 'd5', 'x', 'ссылка на фигуру']... ]
         self.cells = [Cell(self, i) for i in range(self.__width * self.__height)]
         self.fill_board(self.mode)
-        '''if self.mode == game_mode_classic:
-            for i in range(self.__width):
-                self.cells[8 + i].occupy(Pawn(self, self.cells[8 + i], 'White'))
-                self.cells[48 + i].occupy(Pawn(self, self.cells[48 + i], 'Black'))
-
-            self.cells[0].occupy(Rook(self, self.cells[0], 'White'))
-            self.cells[7].occupy(Rook(self, self.cells[7], 'White'))
-            self.cells[1].occupy(Knight(self, self.cells[1], 'White'))
-            self.cells[6].occupy(Knight(self, self.cells[6], 'White'))
-            self.cells[2].occupy(Bishop(self, self.cells[2], 'White'))
-            self.cells[5].occupy(Bishop(self, self.cells[5], 'White'))
-            self.cells[3].occupy(Queen(self, self.cells[3], 'White'))
-            self.cells[4].occupy(King(self, self.cells[4], 'White'))
-
-            # self.cells[16].occupy(Pawn(self, self.cells[16], 'Black'))
-
-            self.cells[56].occupy(Rook(self, self.cells[56], 'Black'))
-            self.cells[63].occupy(Rook(self, self.cells[63], 'Black'))
-            self.cells[57].occupy(Knight(self, self.cells[57], 'Black'))
-            self.cells[62].occupy(Knight(self, self.cells[62], 'Black'))
-            self.cells[58].occupy(Bishop(self, self.cells[58], 'Black'))
-            self.cells[61].occupy(Bishop(self, self.cells[61], 'Black'))
-            self.cells[59].occupy(Queen(self, self.cells[59], 'Black'))
-            self.cells[60].occupy(King(self, self.cells[60], 'Black'))
-        # elif self.mode.__name__ = 'Board':
-
-        self.player_white = Player(self, 'White')
-        self.player_black = Player(self, 'Black')'''
-
         self.players = {'White': self.player_white, 'Black': self.player_black}
 
     def encryption_forsyth_edwards(self) -> str:     # зашифровывает текущую доску в нотацию Форсайта-Эдвардса
