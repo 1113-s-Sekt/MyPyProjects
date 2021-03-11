@@ -23,13 +23,13 @@ class Cell(object):
         self.attacked = [0, 0]
 
     def __repr__(self):
-        return self.position
-
-    def __str__(self):
         if self.piece:
             return str(self.piece)
         else:
             return {'Black': '⬜', 'White': '⬛'}[self.color]
+
+    def __str__(self):
+        return self.position
 
     def __getitem__(self, item: int):
         return self.attacked[item]

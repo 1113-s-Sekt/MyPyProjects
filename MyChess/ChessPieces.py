@@ -14,28 +14,28 @@ class Piece(object):
         self.color = color
         self.position = position
         self.turn = 0
-        self.__available_cells = set()
+        self.available_cells = set()
 
     def __bool__(self):
         return True
 
     def reset_available_cells(self):
-        self.__available_cells = set()
+        self.available_cells = set()
         return True
 
     def add_available_cells(self, cell_to_move_on):
-        self.__available_cells.add(cell_to_move_on)
+        self.available_cells.add(cell_to_move_on)
         return
 
     def rmv_available_cells(self, cell_to_remove):
-        self.__available_cells.remove(cell_to_remove)
+        self.available_cells.remove(cell_to_remove)
         return True
 
     def restrict_available_cells(self, set_to_intersect_with):
         if isinstance(set_to_intersect_with, list):
             set_to_intersect_with = set(set_to_intersect_with)
-        self.__available_cells.intersection_update(set_to_intersect_with)
-        return self.__available_cells
+        self.available_cells.intersection_update(set_to_intersect_with)
+        return self.available_cells
 
 
 class Pawn(Piece):

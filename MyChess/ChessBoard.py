@@ -109,7 +109,6 @@ class Board(object):
     height = NonDataDescriptor()
     turn = IntDescriptor()
     half_turn = IntDescriptor()
-    castles = ChessDescriptor(bool)
     someone_in_check = ChessDescriptor(King)
     permutation = BoolDescriptor()
     move_list = ChessDescriptor(Move)
@@ -138,10 +137,12 @@ class Board(object):
             return None
         else:
             try:
-                return self.get_cell(position).piece
+                if isinstance(position, list):
+                    return self.cells[self.xy_to_index(position)]
+                return self.get_cell(position)
             finally:
-                raise ValueError('Position should be in Notation form')
-            # должен возвращать по позиции 'e4' фигуру на этой клетке если она есть, иначе None
+                raise ValueError('Position should be in Notation or [x, y]] form')
+            # должен возвращать по позиции 'e4' или по координатам клетку если она существует, иначе None
 
     def __repr__(self):
         temp = ''
@@ -229,6 +230,7 @@ class Board(object):
         nums = ('1', '2', '3', '4', '5', '6', '7', '8')
         index = 56  # Индекс клетки, а не итерации по строке code
         j = 0
+        castles = []
         while code[j] != ' ':
             if code[j] == '/':
                 index -= 16
@@ -240,15 +242,15 @@ class Board(object):
                 clr = {True: Colors[0], False: Colors[1]}[code[j].upper() == code[j]]
                 self.cells[index].piece = piece_dict[code[j]](clr, self.cells[index].position)
                 index += 1
+                if isinstance(self.cells[index].piece, Rook):
+                    castles.append(self.cells[index].piece)
             j += 1
         self.turn = (int(code[-1]) - 1) * 2 + {'w': 0, 'b': 1}[code[-13]]
         self.half_turn = int(code[-3])
-        castles = []
         for j in range(4):
-            if code[-8 - j] != '-':
-                castles.append(code[-8 - j])
-                self.castles[-j - 1] = True
-        return castles
+            if code[-8 - j] == '-':
+                self.castles[-j - 1] = castles[j]
+        return True
 
     def clear_board(self):
         """Очищает доску: стирает все ходы, обновляет счётчики и флаги, стирает игроков"""
@@ -292,7 +294,7 @@ class Board(object):
         return True
 
     def refill_boar(self):
-
+        """Перезаполняет доску с текущим game-mode"""
         self.clear_board()
         self.fill_board(self.mode)
         return True
@@ -306,7 +308,7 @@ class Board(object):
     def __step(self, move_):
         """Механизм передвижения фигуры (перепривязка её местоположения)"""
         if (move_(0) not in self.cells) or (move_(1) not in self.cells):
-            raise AttributeError('move contains link to cell of another board')
+            raise AttributeError('move contains reference to cell of another board')
         moving_piece = move_(0).piece
         move_(1).piece = moving_piece
         moving_piece.position = move_(1).position
@@ -316,7 +318,7 @@ class Board(object):
     def __capture(self, move_):
         """Механизм взятия вражеской фигуры"""
         if (move_(0) not in self.cells) or (move_(1) not in self.cells):
-            raise AttributeError('move contains link to cell of another board')
+            raise AttributeError('move contains reference to cell of another board')
         if move_.capture():
             attacking_piece = move_(0).piece
             piece_under_attack = move_(1).piece      # Эта фигура помнит свою позицию и если что её можно легко
@@ -373,33 +375,36 @@ class Board(object):
         # нужно проверить равняется ли move_ хотя бы какому-то ходу в списке ходов игрока
         # ход будем сразу брать из available_moves, фильтровать ходы будем в интерфейсе
         if move_ not in player.possible_moves:
-            print('move_ not in player.possible_moves')
-            return False
+            raise ValueError('move_ not in player.possible_moves')
         else:
-            if move[0] == '0-0-0':  # ход "длинная рокировка"
+            if move_.castle_long():  # ход "длинная рокировка"
                 if color1 == 'White':
-                    self.__step(['e1', 'c1'])
-                    self.__step(['a1', 'd1'])
+                    self.__step(['??', 'c1'])
+                    self.__step(['??', 'd1'])
                     self.get_cell('c1').occupied.turn += 1
+                    # self.castles[:2] = False лучше будем проверять в move_creator один разок
                 elif color1 == 'Black':
                     self.__step(['e8', 'c8'])
                     self.__step(['a8', 'd8'])
                     self.get_cell('c8').occupied.turn += 1
+                    self.castles[2:] = False
                 else:
                     return False
                 self.turn += 1
                 self.half_turn += 1
-                self.move_list.append(move)
+                self.move_list.append(move_)
                 return True
-            elif move[0] == '0-0':  # ход "короткая рокировка"
+            elif move_[0] == '0-0':  # ход "короткая рокировка"
                 if color1 == 'White':
                     self.__step(['e1', 'g1'])
                     self.__step(['h1', 'f1'])
                     self.get_cell('g1').occupied.turn += 1
+                    self.castles[:2] = False
                 elif color1 == 'Black':
                     self.__step(['e8', 'g8'])
                     self.__step(['h8', 'f8'])
                     self.get_cell('g8').occupied.turn += 1
+                    self.castles[2:] = False
                 else:
                     return False
                 self.turn += 1
@@ -441,248 +446,264 @@ class Board(object):
         return True
 
     def reset_check(self):
-        if self.someone_in_check:
+        if bool(self.someone_in_check):
             self.someone_in_check.in_check = False
         self.someone_in_check = False
         return True
 
-    def if_on_the_line(self, piece1, piece2):                   # метод возвращает все клетки между 2мя фигурами
-        xy1 = notation_to_xy(piece1.cell.position())            # (не включая сами фигуры). Наличие третьих фигур на
-        cells_between = []                                      # этих клетках не проверяется (это tool)
+    def if_on_the_line(self, piece1, piece2):
+        """Метод возвращает все клетки между 2мя фигурами (не включая сами фигуры).
+        Наличие третьих фигур на этих клетках не проверяется"""
+        xy1 = notation_to_xy(piece1.position)
+        cells_between = []
         vector = [[1, 1], [1, 0], [1, -1], [0, -1], [-1, -1], [-1, 0], [-1, 1], [0, 1]]
         for vect in vector:
-            i = 1  # i - это скаляр, на который умножается вектор. Изначально 1, в конце while -> i += 1
+            i = 1               # i - это скаляр, на который умножается вектор. Изначально 1, в конце while -> i += 1
             temp = []
             while 0 <= xy1[0] + i * vect[0] <= 7 and 0 <= xy1[1] + i * vect[1] <= 7:
-                cell = self.cells[
-                    self.xy_to_index([xy1[0] + i * vect[0], xy1[1] + i * vect[1]])]
-                dude = cell.occupied
+                cell = self.cells[self.xy_to_index([xy1[0] + i * vect[0], xy1[1] + i * vect[1]])]
+                dude = cell.piece
                 i += 1
-                if dude != piece2:
-                    temp.append(cell)
-                    continue
-                elif dude == piece2:
+                if dude == piece2:
                     cells_between = temp
                     return cells_between
+                else:
+                    temp.append(cell)
+                    continue
         return cells_between
 
-    def look_for_cells_are_attacked(self):      # смотрим какие клетки атакуются и какие клетки "(псевдо)доступны"
+    def look_for_cells_are_attacked(self):      # смотрим какие клетки атакуются и какие клетки "атакуются"
         self.reset_check()
         for cell in self.cells:
             cell.attacked = [0, 0]
         for player in [self.player_white, self.player_black]:
-            direction = {'White': 1, 'Black': -1}[player.color]
-            ind = {'White': 0, 'Black': 1}[player.color]
+            direction = {Colors[0]: 1, Colors[1]: -1}[player.color]
+            ind = {Colors[0]: 0, Colors[1]: 1}[player.color]
             for figure in player.pieces:             # начинаем с фигур белых
                 figure.reset_available_cells()
-                piece_xy = notation_to_xy(figure.cell.position())
-                piece_name = figure.__class__.__name__
-                if piece_name == 'Pawn':         # смотрим какие клетки атакует пешка
+                piece_xy = notation_to_xy(figure.position)
+                if isinstance(figure, Pawn):         # смотрим какие клетки атакует пешка
                     if piece_xy[0] > 0:
-                        cell = self.cells[self.xy_to_index([piece_xy[0] - 1, piece_xy[1] + direction])]
+                        cell = self([piece_xy[0] - 1, piece_xy[1] + direction])
                         cell.attacked[ind] += 1
                         figure.add_available_cells(cell)
-                        dude = self.cells[self.xy_to_index([piece_xy[0] - 1, piece_xy[1] + direction])].occupied
+                        dude = cell.piece
                         if isinstance(dude, King) and dude.color != figure.color:
-                            dude.check_by(figure)
+                            self.make_check(figure, dude)
                     if piece_xy[0] < 7:
-                        cell = self.cells[self.xy_to_index([piece_xy[0] + 1, piece_xy[1] + direction])]
+                        cell = self([piece_xy[0] + 1, piece_xy[1] + direction])
                         cell.attacked[ind] += 1
                         figure.add_available_cells(cell)
-                        dude = self.cells[self.xy_to_index([piece_xy[0] + 1, piece_xy[1] + direction])].occupied
+                        dude = cell.piece
                         if isinstance(dude, King) and dude.color != figure.color:
-                            dude.check_by(figure)
-                    if not self.cells[self.xy_to_index([piece_xy[0], piece_xy[1] + direction])].occupied:
-                        figure.add_available_cells(self.cells[self.xy_to_index([piece_xy[0], piece_xy[1] + direction])])
-                        if figure.turn == 0 and piece_xy[1] == {'White': 1, 'Black': 6}[figure.color]:
-                            figure.add_available_cells(
-                                self.cells[self.xy_to_index([piece_xy[0], piece_xy[1] + 2 * direction])])
+                            self.make_check(figure, dude)
+                    cell_to_move = self([piece_xy[0], piece_xy[1] + direction])
+                    if not cell_to_move.piece:
+                        figure.add_available_cells(cell_to_move)
+                        if figure.turn == 0 and piece_xy[1] == {Colors[0]: 1, Colors[1]: 6}[figure.color]:
+                            figure.add_available_cells(self([piece_xy[0], piece_xy[1] + 2 * direction]))
                     continue
-                elif piece_name == 'King':        # смотрим атаки короля по векторам
+                elif isinstance(figure, King):        # смотрим атаки короля по векторам
                     vector = [[1, 1], [1, 0], [1, -1], [0, -1], [-1, -1], [-1, 0], [-1, 1], [0, 1]]
                     for vect in vector:
                         if 0 <= piece_xy[0] + vect[0] <= 7 and 0 <= piece_xy[1] + vect[1] <= 7:
-                            cell = self.cells[self.xy_to_index([piece_xy[0] + vect[0], piece_xy[1] + vect[1]])]
+                            cell = self([piece_xy[0] + vect[0], piece_xy[1] + vect[1]])
                             cell.attacked[ind] += 1
                             figure.add_available_cells(cell)
                     continue
-                elif piece_name == 'Knight':      # смотрим атаки коня, пробегаем по всем возможным векторам
+                elif isinstance(figure, Knight):      # смотрим атаки коня, пробегаем по всем возможным векторам
                     vector = [[1, 2], [2, 1], [-1, 2], [2, -1], [1, -2], [-2, 1], [-1, -2], [-2, -1]]
                     for vect in vector:
                         if 0 <= piece_xy[0] + vect[0] <= 7 and 0 <= piece_xy[1] + vect[1] <= 7:
-                            cell = self.cells[self.xy_to_index([piece_xy[0] + vect[0], piece_xy[1] + vect[1]])]
+                            cell = self([piece_xy[0] + vect[0], piece_xy[1] + vect[1]])
                             cell.attacked[ind] += 1
                             figure.add_available_cells(cell)
-                            dude = cell.occupied
-                            if not dude:
-                                pass
-                            elif isinstance(dude, King) and dude.color != figure.color:
-                                dude.check_by(figure)
+                            dude = cell.piece
+                            if isinstance(dude, King) and dude.color != figure.color:
+                                self.make_check(figure, dude)
                     continue
                 vector = []
-                if piece_name == 'Rook':       # вектора для ладьи
+                if isinstance(figure, Rook):       # вектора для ладьи
                     vector = [[1, 0], [0, -1], [-1, 0], [0, 1]]
-                elif piece_name == 'Bishop':     # вектора для слона
+                elif isinstance(figure, Bishop):     # вектора для слона
                     vector = [[1, 1], [1, -1], [-1, -1], [-1, 1]]
-                elif piece_name == 'Queen':     # вектора для ферзя
+                elif isinstance(figure, Queen):     # вектора для ферзя
                     vector = [[1, 1], [1, 0], [1, -1], [0, -1], [-1, -1], [-1, 0], [-1, 1], [0, 1]]
                 for vect in vector:
                     i = 1       # i - это скаляр, на который умножается вектор. Изначально 1, в конце while -> i += 1
                     while 0 <= piece_xy[0] + i * vect[0] <= 7 and 0 <= piece_xy[1] + i * vect[1] <= 7:
-                        cell = self.cells[
-                            self.xy_to_index([piece_xy[0] + i * vect[0], piece_xy[1] + i * vect[1]])]
+                        cell = self([piece_xy[0] + i * vect[0], piece_xy[1] + i * vect[1]])
                         cell.attacked[ind] += 1
                         figure.add_available_cells(cell)
-                        dude = cell.occupied
+                        dude = cell.piece
                         i += 1
-                        if not dude:
-                            pass
-                        elif isinstance(dude, King) and dude.color != figure.color:
-                            dude.check_by(figure)
-                        else:
+                        if dude:
+                            if isinstance(dude, King) and dude.color != figure.color:
+                                self.make_check(figure, dude)
                             break
 
     def move_creator(self):
-        white = self.player_white
-        black = self.player_black
-        white.reset_possible_moves()
-        black.reset_possible_moves()
-        for player in [white, black]:
-            for p in player.pieces:
-                p.bounded = False
-        if bool(self.someone_in_check):             # Рассмотрим сперва наличие шаха на доске
-            king = self.someone_in_check            # если на доске шах, то ходит по-любому тот, кому шах
-            player = {'White': white, 'Black': black}[king.color]
-            king.available_cells.remove(king.cell)
-            for cell in king.available_cells:  # 1. сперва смотрим ходы короля
-                if cell.attacked[{'White': 1, 'Black': 0}[king.color]] == 0:
-                    dude = cell.occupied
-                    if not dude:
-                        player.add_possible_moves([king.cell.position(), cell.position()])
-                    elif dude.color == king.color:
-                        continue
-                    else:
-                        player.add_possible_moves([king.cell.position(), cell.position(), 'x'])
-            attacker = king.in_check                                    # если теперь шах одиночный, то:
-            # 2,3. смотрим ходы перекрытия и съедения атакующей фигуры
-            cells_we_can_stand_on = self.if_on_the_line(attacker, king)        # клетки доступные для перекрытия
-            cells_we_can_stand_on.append(attacker.cell)
-            cells_we_can_stand_on = set(cells_we_can_stand_on)        # добавляем клетку атакующего, её можно атаковать
-            if king.cell.attacked[{'White': 1, 'Black': 0}[king.color]] == 1:
-                for figure in player.pieces:
-                    if isinstance(figure, Pawn) or isinstance(figure, King):
-                        continue                                # пешку рассматриваем отдельно (passant-check, etc.)
-                    figure.available_cells.remove(figure.cell)  # у наших фигур убираем клетки на которой они стоят
-                    # далее из пересечения этих клеток и клеток, доступных нашей фигуре(K, Q, R, B, not P) делаем ходы
-                    for cell in figure.available_cells.intersection(cells_we_can_stand_on):
-                        dude = cell.occupied
-                        if not dude:
-                            player.add_possible_moves([figure.cell.position(), cell.position()])
-                        elif dude.color == figure.color:
-                            continue
-                        else:
-                            player.add_possible_moves([figure.cell.position(), cell.position(), 'x'])
-                for figure in player.pieces:    # а теперь начинает ебаный ад. Рассматриваем пешки....
-                    if isinstance(figure, Pawn):
-                        figure.available_cells.remove(figure.cell)
-                        for cell in figure.available_cells.intersection(cells_we_can_stand_on):
-                            if cell.position()[0] != figure.cell.position()[0]:
-                                dude = cell.occupied
-                                if dude == attacker:
-                                    player.add_possible_moves([figure.cell.position(), cell.position(), 'x'])
-                            else:
-                                if not cell.occupied:
-                                        player.add_possible_moves([figure.cell.position(), cell.position()])
-                        # а что если возможно взятие на проходе убивающее шахующую пешку????
-                        # Это ужасно криво, но что поделать))00) Очень много обстоятельств должно сложиться
-                        # В 99.9999% случаев не дойдёт даже до проверки 3го условия
-                        if len(self.move_list[-1]) < 2:
-                            continue
-                        if isinstance(attacker, Pawn) and self.move_list[-1][1] == attacker.cell.position():
-                            if attacker.turn == 1 and \
-                                    abs(int(self.move_list[-1][0][1]) - int(self.move_list[-1][1][1])) == 2:
-                                if attacker.cell.position()[0] == figure.cell.position()[0]:
-                                    for cell in figure.available_cells:
-                                        if cell.position()[1] == attacker.cell.position()[1]:
-                                            player.add_possible_moves(
-                                                [figure.cell.position(), cell.position(), 'passant'])
-            return self.someone_in_check
-        # Слава Господу мы закончили с шахами. Теперь связОчки и все остальные ходы)0)))))))))))))))
-        player = {0: white, 1: black}[self.turn % 2]   # смотрим какой игрок ходит в общем случае
-        mvr_clr = player.color                         # цвет запишем на всякий
-        attack = {'White': 1, 'Black': 0}[mvr_clr]
-        # будем смотреть связки начиная с короля во все стороны по очереди (векторно)
-        # если на пути встречается союзная фигура, а за ней вражеская нужного типа - то союзная привязывается
-        king = False    # для начала неплохо отыскать короля бы >_<
-        for figure in player.pieces:    # в будущем неплохо бы сохранять ссылку на короля у самого игрока, или типо того
-            if isinstance(figure, King):
-                king = figure
-        king_xy = notation_to_xy(king.cell.position())
+        dict_ = {0: self.player_white, 1: self.player_black}
+        player = dict_[self.turn % 2]
+        previous_player = dict_[(self.turn + 1) % 2]
+        mvr_clr = player.color
+        king = player.king
+        king_xy = self(king.position)
         vector = [[1, 1], [1, 0], [1, -1], [0, -1], [-1, -1], [-1, 0], [-1, 1], [0, 1]]
-        for vect in vector:     # на данном этапе мы просто связываем фигуры, потом будем обрабатывать всё вместе
-            j = 1
-            temp = False
+        attack = {Colors[0]: 1, Colors[1]: 0}[mvr_clr]
+
+        previous_player.reset_possible_moves()      # сбрасываем все ходы предыдущего игрока, обнуляем его связки
+        for p in previous_player.pieces:
+            p.bounded = False
+
+        # =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-= Сперва нужно сделать СВЯЗКИ
+
+        for vect in vector:  # На данном этапе мы просто связываем фигуры, потом будем обрабатывать всё вместе.
+            j = 1            # Будем смотреть связки начиная с короля во все стороны векторно. Если на пути встречается
+            temp = False     # союзная фигура, а за ней вражеская нужного типа - то союзная привязывается.
             while 0 <= king_xy[0] + j * vect[0] <= 7 and 0 <= king_xy[1] + j * vect[1] <= 7:
-                cell = self.cells[
-                    self.xy_to_index([king_xy[0] + j * vect[0], king_xy[1] + j * vect[1]])]
-                dude = cell.occupied
+                cell = self([king_xy[0] + j * vect[0], king_xy[1] + j * vect[1]])
+                dude = cell.piece
                 if not dude:
                     j += 1
                     continue
                 if dude.color == king.color and not bool(temp):
                     temp = dude
                 elif dude.color != king.color:
-                    n = dude.__class__.__name__
-                    if n == 'King' or n == 'Pawn':  # будем честны, король и пешка связать не могут
-                        break                       # конь должен отсекаться сам собой т.к. не лежит на линии при атаке
-                    if bool(temp) and temp.cell in dude.available_cells:
-                        temp.bounded = dude     # тут мы связываем фигуру только если сперва нашли союзную нам, и
-                    break                       # она атакована следующей несоюзной фигурой
+                    if isinstance(dude, King) or isinstance(dude, Pawn):   # Король и пешка связать никого не могут.
+                        break                       # Конь должен отсекаться сам собой т.к. не лежит на линии при атаке.
+                    if bool(temp) and self(temp.position) in dude.available_cells:
+                        temp.bounded = dude     # Тут мы связываем фигуру только если сперва нашли союзную нам, и
+                        if not isinstance(temp, Pawn):  # она атакована следующей несоюзной фигурой.
+                            cells_to_stand_on = self.if_on_the_line(dude, king)
+                            cells_to_stand_on.append(cell)  # Сразу на месте и ограничиваем доступные клетки фигуры,
+                            cells_to_stand_on = set(cells_to_stand_on)
+                            temp.available_cells = temp.available_cells.intersection(cells_to_stand_on)
+                    break
                 j += 1
-        # вроде связали, потом посмотрим как работает)))))))))))))))
-        # теперь давайте наконец пробежимся по всем фигуркам, поимённо
+
+        # =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-= Закончили СВЯЗКИ, пошли ШАХИ
+
+        if self.someone_in_check:             # Рассмотрим сперва наличие шаха на доске
+            if self.someone_in_check != player.king:
+                raise ValueError('Fatal Error: king in check is not the player king')
+            for cell in king.available_cells:  # 1. сперва смотрим ходы короля
+                if cell.attacked[attack] == 0:
+                    dude = cell.piece
+                    if not dude:
+                        player.add_possible_moves(Move(self(king.position), cell))
+                    elif dude.color != king.color:
+                        player.add_possible_moves(Move(self(king.position), cell, 'x'))
+            attacker = king.in_check                          # если теперь шах одиночный, то:
+            # _________________________________________________ 2,3. смотрим ходы перекрытия и съедения атакующей фигуры
+            cells_we_can_stand_on = self.if_on_the_line(attacker, king)     # <- это клетки доступные для перекрытия
+            cells_we_can_stand_on.append(self(attacker.position))      # добавляем клетку атакующего, её можно атаковать
+            cells_we_can_stand_on = set(cells_we_can_stand_on)
+            if self(king.position).attacked[attack] == 1:
+                for figure in player.pieces:
+                    if isinstance(figure, Pawn) or isinstance(figure, King):
+                        continue                                # пешку рассматриваем отдельно (passant-check, etc.)
+                    # далее из пересечения этих клеток и клеток, доступных нашей фигуре(K, Q, R, B, not P) делаем ходы
+                    for cell in figure.available_cells.intersection(cells_we_can_stand_on):
+                        dude = cell.piece
+                        if not dude:
+                            player.add_possible_moves(Move(self(figure.position), cell))
+                        elif dude.color != figure.color:
+                            player.add_possible_moves(Move(self(figure.position), cell, 'x'))
+                for figure in player.pieces:    # а теперь начинает ебаный ад. Рассматриваем пешки....
+                    if isinstance(figure, Pawn):
+                        for cell in figure.available_cells.intersection(cells_we_can_stand_on):
+                            if cell.position[0] != figure.position[0]:
+                                dude = cell.piece
+                                if dude == attacker:
+                                    player.add_possible_moves(Move(self(figure.position), cell, 'x'))
+                            else:
+                                if not cell.piece:
+                                    player.add_possible_moves(Move(self(figure.position), cell))
+                        # А что если возможно взятие на проходе убивающее шахующую пешку????
+                        if self.move_list[-1].optional:
+                            continue
+                        lmv = self.move_list[-1]
+                        if isinstance(attacker, Pawn) and lmv[1].piece == attacker and attacker.turn == 1 and\
+                                abs(int(lmv[0][1]) - int(lmv[1][1])) == 2 and\
+                                attacker.position[0] == figure.position[0]:
+                            for cell in figure.available_cells:
+                                if cell.position[1] == attacker.position[1]:
+                                    player.add_possible_moves(Move(self(figure.position), cell, 'passant'))
+            return True
+
+        # =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-= ШАХИ закончили, начинаем обычные ходы
+
+        # ОБЯЗАТЕЛЬНО НУЖНО ПРОВЕРИТЬ СВЯЗКИ ПЕШЕК ОТДЕЛЬНО - ЕСЛИ НА ПОСЛЕДНЕЙ ДОСТУПНОЙ КЛЕТКЕ ПО ДИАГОНАЛИ НЕТ СВЯЗЫВАЮЩЕЙ ФИГУРЫ ТО ГАВНОООО
+        for i in range(4):
+            if self.castles[i] and self.castles[i].turn > 0:
+                self.castles[i] = False
         for figure in player.pieces:
-            name = figure.__class__.__name__
-            if name == 'King':
+            if isinstance(figure, King):
                 for cell in figure.available_cells:
-                    if cell != figure.cell:
-                        if cell.attacked[attack] == 0:
-                            if not cell.occupied:
-                                player.add_possible_moves([figure.cell.position(), cell.position()])
-                            elif cell.occupied.color != figure.color:
-                                player.add_possible_moves([figure.cell.position(), cell.position(), 'x'])
-                if figure.turn == 0:
-                    clr = figure.color
-                    if clr == 'White':
-                        dude = self.cells[0].occupied
-                        if bool(dude):
-                            if dude.turn == 0 and isinstance(dude, Rook) and dude.color == clr:
-                                if self.cells[1].attacked[attack] == 0 and not bool(self.cells[1].occupied) \
-                                        and self.cells[2].attacked[attack] == 0 and not bool(self.cells[2].occupied)\
-                                        and self.cells[3].attacked[attack] == 0 and not bool(self.cells[3].occupied):
-                                    player.add_possible_moves(['0-0-0'])
-                        dude = self.cells[7].occupied
-                        if bool(dude):
-                            if dude.turn == 0 and isinstance(dude, Rook) and dude.color == clr:
-                                if self.cells[5].attacked[attack] == 0 and not bool(self.cells[5].occupied) \
-                                        and self.cells[6].attacked[attack] == 0 and not bool(self.cells[6].occupied):
-                                    player.add_possible_moves(['0-0'])
-                    elif clr == 'Black':
-                        dude = self.cells[56].occupied
-                        if bool(dude):
-                            if dude.turn == 0 and isinstance(dude, Rook) and dude.color == clr:
-                                if self.cells[57].attacked[attack] == 0 and not bool(self.cells[57].occupied) \
-                                        and self.cells[58].attacked[attack] == 0 and not bool(self.cells[58].occupied) \
-                                        and self.cells[59].attacked[attack] == 0 and not bool(self.cells[59].occupied):
-                                    player.add_possible_moves(['0-0-0'])
-                        dude = self.cells[63].occupied
-                        if bool(dude):
-                            if dude.turn == 0 and isinstance(dude, Rook) and dude.color == clr:
-                                if self.cells[61].attacked[attack] == 0 and not bool(self.cells[61].occupied) \
-                                        and self.cells[62].attacked[attack] == 0 and not bool(self.cells[62].occupied):
-                                    player.add_possible_moves(['0-0'])
-            elif name == 'Bishop' or name == 'Queen' or name == 'Rook' or name == 'Knight':
-                if bool(figure.bounded):
+                    if cell.attacked[attack] == 0:
+                        if not cell.piece:
+                            player.add_possible_moves(Move(self(figure.position), cell))
+                        elif cell.piece.color != figure.color:
+                            player.add_possible_moves(Move(self(figure.position), cell, 'x'))
+                clr = figure.color
+                if clr == Colors[0]:
+                    if figure.turn > 0:
+                        self.castles[:2] = False
+                    if self.castles[0]:
+                        f = True
+                        for cell in [self.cells[i] for i in range(self.notation_to_index(figure.position) + 1, 7)]:
+                            dude = cell.piece
+                            if cell.attacked[attack] > 0 or dude != self.castles[0]:
+                                f = False
+                                break
+                        if f:
+                            m = Move(self(figure.position), self('g1'), '0-0')
+                            m.fig_appeared = self.castles[0]
+                            player.add_possible_moves(m)
+                            del m
+                    if self.castles[1]:
+                        f = True
+                        for cell in [self.cells[i] for i in range(2, self.notation_to_index(figure.position))]:
+                            dude = cell.piece
+                            if cell.attacked[attack] > 0 or dude != self.castles[1]:
+                                f = False
+                                break
+                        if f:
+                            m = Move(self(figure.position), self('c1'), '0-0-0')
+                            m.fig_appeared = self.castles[1]
+                            player.add_possible_moves(m)
+                            del m
+                elif clr == Colors[1]:
+                    if figure.turn > 0:
+                        self.castles[2:] = False
+                    if self.castles[2]:
+                        f = True
+                        for cell in [self.cells[i] for i in range(self.notation_to_index(figure.position) + 1, 63)]:
+                            dude = cell.piece
+                            if cell.attacked[attack] > 0 or dude != self.castles[2]:
+                                f = False
+                                break
+                        if f:
+                            m = Move(self(figure.position), self('g8'), '0-0')
+                            m.fig_appeared = self.castles[2]
+                            player.add_possible_moves(m)
+                            del m
+                    if self.castles[3]:
+                        f = True
+                        for cell in [self.cells[i] for i in range(58, self.notation_to_index(figure.position))]:
+                            dude = cell.piece
+                            if cell.attacked[attack] > 0 or dude != self.castles[3]:
+                                f = False
+                                break
+                        if f:
+                            m = Move(self(figure.position), self('c8'), '0-0-0')
+                            m.fig_appeared = self.castles[3]
+                            player.add_possible_moves(m)
+                            del m
+            elif isinstance(figure, Rook) or isinstance(figure, Knight) or isinstance(figure, Bishop) \
+                    or isinstance(figure, Queen):
+                '''if bool(figure.bounded):
                     if name == 'Knight':  # #
                         continue        # #
                     attacker = figure.bounded
@@ -691,41 +712,42 @@ class Board(object):
                     cells_to_stand_on = set(cells_to_stand_on)
                     for cell in figure.available_cells.intersection(cells_to_stand_on):
                         if cell != figure.cell:
-                            if bool(cell.occupied):
+                            if bool(cell.piece):
                                 player.add_possible_moves([figure.cell.position(), cell.position(), 'x'])
                             else:
-                                player.add_possible_moves([figure.cell.position(), cell.position()])
-                else:
-                    for cell in figure.available_cells:
-                        if cell != figure.cell:
-                            if bool(cell.occupied) and cell.occupied.color != mvr_clr:
-                                player.add_possible_moves([figure.cell.position(), cell.position(), 'x'])
-                            elif not cell.occupied:
-                                player.add_possible_moves([figure.cell.position(), cell.position()])
-            elif name == 'Pawn':
+                                player.add_possible_moves([figure.cell.position(), cell.position()])'''
+                for cell in figure.available_cells:
+                    if not cell.piece:
+                        player.add_possible_moves(Move(self(figure.position), cell))
+                    elif bool(cell.piece) and cell.piece.color != mvr_clr:
+                        player.add_possible_moves(Move(self(figure.position), cell, 'x'))
+            elif isinstance(figure, Pawn):
+                
+
+
                 if bool(figure.bounded):
                     attacker = figure.bounded
                     if attacker.cell.position()[0] == figure.cell.position()[0]:
                         for cell in figure.available_cells:
                             if cell.position()[0] == figure.cell.position()[0] and cell != figure.cell:
-                                if not cell.occupied:
+                                if not cell.piece:
                                     player.add_possible_moves([figure.cell.position(), cell.position()])
                     else:
                         for cell in figure.available_cells:
-                            if cell.position()[0] != figure.cell.position()[0] and cell.occupied == attacker:
+                            if cell.position()[0] != figure.cell.position()[0] and cell.piece == attacker:
                                 player.add_possible_moves([figure.cell.position(), cell.position(), 'x'])
                 else:
                     for cell in figure.available_cells:
                         if cell.position()[0] == figure.cell.position()[0] and cell != figure.cell:
-                            if not cell.occupied:
+                            if not cell.piece:
                                 player.add_possible_moves([figure.cell.position(), cell.position()])
                         if cell.position()[0] != figure.cell.position()[0]:
-                            dude = cell.occupied
+                            dude = cell.piece
                             if not dude:
                                 if len(self.move_list) == 0 or len(self.move_list[-1]) < 2:
                                     continue
                                 lmv = self.move_list[-1]
-                                temp = self.get_cell(self.move_list[-1][1]).occupied
+                                temp = self.get_cell(self.move_list[-1][1]).piece
                                 if isinstance(temp, Pawn) and temp.cell.position()[0] == cell.position()[0]:
                                     if temp.turn == 1 and abs(int(lmv[0][1]) - int(lmv[1][1])) == 2:
                                         if temp.cell.position()[1] == figure.cell.position()[1]:
@@ -737,16 +759,16 @@ class Board(object):
                                                 for i in range(king_xy[1]):
                                                     cll = self.cells[
                                                         {'White': 4, 'Black': 3}[king.color] * self.width + i]
-                                                    if not cell.occupied:
+                                                    if not cell.piece:
                                                         continue
-                                                    nm = cll.occupied.__class__.__name__
-                                                    clr = cll.occupied.color
+                                                    nm = cll.piece.__class__.__name__
+                                                    clr = cll.piece.color
                                                     if (nm == 'Rook' or nm == 'Queen') and clr != king.color:
                                                         kekw = 1
-                                                    if kekw == 1 and (cll.occupied == figure or
+                                                    if kekw == 1 and (cll.piece == figure or
                                                                       cll.position() == lmv[1]):
                                                         kekw = 2
-                                                    if kekw == 2 and (cll.occupied == figure or
+                                                    if kekw == 2 and (cll.piece == figure or
                                                                       cll.position() == lmv[1]):
                                                         kekw = 3
                                                 if kekw == 3:
@@ -754,16 +776,16 @@ class Board(object):
                                                 for i in range(7, king_xy[1] - 1, -1):
                                                     cll = self.cells[
                                                         {'White': 4, 'Black': 3}[king.color] * self.width + i]
-                                                    if not cell.occupied:
+                                                    if not cell.piece:
                                                         continue
-                                                    nm = cll.occupied.__class__.__name__
-                                                    clr = cll.occupied.color
+                                                    nm = cll.piece.__class__.__name__
+                                                    clr = cll.piece.color
                                                     if (nm == 'Rook' or nm == 'Queen') and clr != king.color:
                                                         kekw = 1
-                                                    if kekw == 1 and (cll.occupied == figure or
+                                                    if kekw == 1 and (cll.piece == figure or
                                                                       cll.position() == lmv[1]):
                                                         kekw = 2
-                                                    if kekw == 2 and (cll.occupied == figure or
+                                                    if kekw == 2 and (cll.piece == figure or
                                                                       cll.position() == lmv[1]):
                                                         kekw = 3
                                                 if kekw == 3:
