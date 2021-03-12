@@ -1,38 +1,37 @@
+from ChessPieces import *
 
 
-class Cell:
-    def __init__(self, board, num):
-        w = board.width()
-        self.__num = num
-        self.occupied = 0
-        self.color = ['Black', 'White'][(num // w + num % w) % 2]
-        self.__position = 'abcdefgh'[num % w] + '12345678'[num // w]
+class Cell(object):
+
+    width = IntDescriptor()
+    index = IntDescriptor()
+    color = ColorDescriptor()
+    piece = SmthOrFalseDescriptor(Piece)
+    position = PositionDescriptor()
+    attacked = ChessDescriptor(int)
+
+    def __init__(self, index: int, board_width=8):
+        self.width = board_width
+        self.index = index
+        self.piece = False
+        self.color = ['Black', 'White'][(self.index // self.width + self.index % self.width) % 2]
+        self.position = 'abcdefgh'[self.index % self.width] + '12345678'[self.index // self.width]
         self.attacked = [0, 0]
-        if num % 2 == 0:
-            self.image = Images['BlackCell']
-        else:
-            self.image = Images['WhiteCell']
 
     def __repr__(self):
-        return self.__position
+        return self.position
 
     def __str__(self):
-        if self.occupied:
-            return str(self.occupied)
+        if self.piece:
+            return str(self.piece)
         else:
-            return {'Black': '⬜', 'White': '⬛'}[self.color]
+            return {'Black': '▯', 'White': '▮'}[self.color]
 
-    def occupy(self, piece):
-        self.occupied = piece
+    def __getitem__(self, item: int):
+        return self.attacked[item]
 
-    def index(self):
-        return self.__num
-
-    def position(self):
-        return self.__position
-
-    def pos(self):
-        return [Notation[self.__position[0]], int(self.__position[1])-1]
+    def coord(self):
+        return [Notation[self.position[0]], int(self.position[1])-1]
 
 
 # _____________________________________________________________________________________________________________________

@@ -1,45 +1,58 @@
-from PyQt5.QtCore import QRect
+from ChessDescriptors import *
+
 from PyQt5.QtGui import QImage
+
+Notation = {
+    'a': 0, 'b': 1, 'c': 2, 'd': 3, 'e': 4, 'f': 5, 'g': 6, 'h': 7, 'i': 8, 'j': 9, 'k': 10        # etc.
+}
 
 
 class Piece(object):
-    "Класс шахматных фигур. Обладает цветом, соответствующей фигуре клеткой на доске, ссылкой на эту доску, etc."
-    def __init__(self, board, cell, color):
+    """Класс шахматных фигур. Обладает цветом, соответствующей фигуре клеткой на доске, ссылкой на эту доску, etc."""
+
+    color = ColorDescriptor()
+    position = PositionDescriptor()
+    turn = IntDescriptor()
+
+    def __init__(self, color, position=None):
         self.color = color
-        self.cell = cell
-        self.board = board
+        self.position = position
         self.turn = 0
-        self.available_cells = set([self.cell])
-        self.bounded = False
-
-    def bind_cell(self, cell):
-        self.cell = cell
-        return True
-
-    def cell_is(self):
-        return self.cell
-
-    def reset_available_cells(self):
-        self.available_cells = set([self.cell])
-        return True
-
-    def add_available_cells(self, cell_to_move_on):
-        self.available_cells.add(cell_to_move_on)
-        return True
-
-    def restrict_available_cells(self, set_to_intersect_with):
-        if set_to_intersect_with.__class__.__name__ == 'list':
-            set_to_intersect_with = set(set_to_intersect_with)
-        self.available_cells.intersection_update(set_to_intersect_with)
-        return self.available_cells
+        self.available_cells = set()
 
     def __bool__(self):
         return True
 
+    def reset_available_cells(self):
+        self.available_cells = set()
+        return True
+
+    def add_available_cells(self, cell_to_move_on):
+        self.available_cells.add(cell_to_move_on)
+        return
+
+    def rmv_available_cells(self, cell_to_remove):
+        self.available_cells.remove(cell_to_remove)
+        return True
+
+    def restrict_available_cells(self, set_to_intersect_with):
+        if isinstance(set_to_intersect_with, list):
+            set_to_intersect_with = set(set_to_intersect_with)
+        self.available_cells.intersection_update(set_to_intersect_with)
+        return self.available_cells
+
+    def coord(self):
+        return [Notation[self.position[0]], int(self.position[1]) - 1]
+
 
 class Pawn(Piece):
-    def __init__(self, board, cell, color):
-        super().__init__(board, cell, color)
+
+    bounded = SmthOrFalseDescriptor(Piece)
+    weight = IntDescriptor()
+
+    def __init__(self, color, position=None):
+        super().__init__(color, position)
+        self.bounded = False
         self.weight = 1
         if self.color == 'White':
             self.image = QImage("Pictures/wikipedia/wP.png")
@@ -53,12 +66,17 @@ class Pawn(Piece):
             return '♙'
 
     def __repr__(self):
-        return 'Pawn' + ' ' + str(self.cell.position())
+        return 'Pawn' + ' ' + self.position
 
 
 class Bishop(Piece):
-    def __init__(self, board, cell, color):
-        super().__init__(board, cell, color)
+
+    bounded = SmthOrFalseDescriptor(Piece)
+    weight = IntDescriptor()
+
+    def __init__(self, color, position=None):
+        super().__init__(color, position)
+        self.bounded = False
         self.weight = 3
         if self.color == 'White':
             self.image = QImage("Pictures/wikipedia/wB.png")
@@ -72,12 +90,17 @@ class Bishop(Piece):
             return '♗'
 
     def __repr__(self):
-        return 'Bishop' + ' ' + str(self.cell.position())
+        return 'Bishop' + ' ' + self.position
 
 
 class Knight(Piece):
-    def __init__(self, board, cell, color):
-        super().__init__(board, cell, color)
+
+    bounded = SmthOrFalseDescriptor(Piece)
+    weight = IntDescriptor()
+
+    def __init__(self, color, position=None):
+        super().__init__(color, position)
+        self.bounded = False
         self.weight = 3
         if self.color == 'White':
             self.image = QImage("Pictures/wikipedia/wN.png")
@@ -91,12 +114,17 @@ class Knight(Piece):
             return '♘'
 
     def __repr__(self):
-        return 'Knight' + ' ' + str(self.cell.position())
+        return 'Knight' + ' ' + self.position
 
 
 class Rook(Piece):
-    def __init__(self, board, cell, color):
-        super().__init__(board, cell, color)
+
+    bounded = SmthOrFalseDescriptor(Piece)
+    weight = IntDescriptor()
+
+    def __init__(self, color, position=None):
+        super().__init__(color, position)
+        self.bounded = False
         self.weight = 5
         if self.color == 'White':
             self.image = QImage("Pictures/wikipedia/wR.png")
@@ -110,12 +138,17 @@ class Rook(Piece):
             return '♖'
 
     def __repr__(self):
-        return 'Rook' + ' ' + str(self.cell.position())
+        return 'Rook' + ' ' + self.position
 
 
 class Queen(Piece):
-    def __init__(self, board, cell, color):
-        super().__init__(board, cell, color)
+
+    bounded = SmthOrFalseDescriptor(Piece)
+    weight = IntDescriptor()
+
+    def __init__(self, color, position=None):
+        super().__init__(color, position)
+        self.bounded = False
         self.weight = 9
         if self.color == 'White':
             self.image = QImage("Pictures/wikipedia/wQ.png")
@@ -129,14 +162,18 @@ class Queen(Piece):
             return '♕'
 
     def __repr__(self):
-        return 'Queen' + ' ' + str(self.cell.position())
+        return 'Queen' + ' ' + self.position
 
 
 class King(Piece):
-    def __init__(self, board, cell, color):
-        super().__init__(board, cell, color)
-        self.weight = 0
+
+    in_check = SmthOrFalseDescriptor(Piece)
+    weight = IntDescriptor()
+
+    def __init__(self, color, position=None):
+        super().__init__(color, position)
         self.in_check = False
+        self.weight = 0
         if self.color == 'White':
             self.image = QImage("Pictures/wikipedia/wK.png")
         else:
@@ -149,12 +186,7 @@ class King(Piece):
             return '♔'
 
     def __repr__(self):
-        return 'King' + ' ' + str(self.cell.position())
-
-    def check_by(self, checking_piece):
-        self.in_check = checking_piece
-        self.board.someone_in_check = self
-        return True
+        return 'King' + ' ' + self.position
 
 
 '''
@@ -163,9 +195,3 @@ class VoidPiece(Piece):
         super().__init__(board, cell)
         self.color = None
 '''
-
-
-if __name__ == '__main__':
-    print(Piece.__doc__)
-    print(Piece.__dict__['__dict__'])
-    print(Pawn.__dict__)

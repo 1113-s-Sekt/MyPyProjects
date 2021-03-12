@@ -1,6 +1,7 @@
 from ChessBoard import *
+gm = game_mode_classic
 
-b = Board(game_mode_fisher)
+b = Board(gm)
 print(b, 'Start of the Game')
 no_checkmate = True
 white = b.player_white
@@ -17,13 +18,16 @@ while no_checkmate:
         print(f'{ {1: white, 0: black}[b.turn % 2] } won the Game, congratulations!')
         continue
     print(f'{player.color} to move')
-    print(b.encryption_forsyth_edwards())
-    offered_move = input().split()
-    while offered_move not in player.possible_moves:
-        print(f'{ offered_move } is not available move, try again:')
-        offered_move = input().split()
-    b.move(offered_move)
+    # print(b.encryption_forsyth_edwards())
+    offered_move = tuple(input().split())
+    good_mv = Move.search_move(player.possible_moves, offered_move)
+    while not good_mv:
+        print(f'{offered_move} is not available move, try again:')
+        offered_move = tuple(input().split())
+        good_mv = Move.search_move(player.possible_moves, offered_move)
+    b.move(good_mv)
     print(b)
+
 
 
 
