@@ -29,40 +29,6 @@ class Move(object):
         self.fig_pawn = False
         self.fig_appeared = False
 
-        '''dude1 = self.from_.occupied
-        dude2 = self.to_.occupied
-        if not dude2:
-            if optional is None:
-                return
-            elif optional in ('Queen', 'Rook', 'Bishop', 'Knight'):
-                if isinstance(dude1, Pawn):
-                    self.prmt = True
-                    self.special = optional
-                else:
-                    raise ValueError('Impossible to permute')
-            elif optional == 'passant':
-                if isinstance(dude1, Pawn):
-                    self.pssnt = True
-                    self.special = optional
-                else:
-                    raise ValueError('Impossible to take en passant')
-            elif optional == 'castle':
-                if isinstance(dude1, King):
-                    if self.to_.position in ('c1', 'c8'):
-                        self.special = '0-0-0'
-                    elif self.to_.position in ('g1', 'g8'):
-                        self.special = '0-0'
-                    else:
-                        raise ValueError('Castle ends at c1, c8, g1, g8')
-                    self.cstl = True
-                else:
-                    raise ValueError('Castle should start with King')
-        elif dude1.color != dude2.color:
-            self.cptr = True
-            self.special = 'x'
-        else:
-            raise ValueError('Impossible move')'''
-
     def __getitem__(self, item: int):
         if item not in (0, 1, 2, 3, 4):
             raise ValueError('Index out of range')
@@ -88,6 +54,10 @@ class Move(object):
     def __repr__(self):
         if not self.optional:
             return str(self.from_.position) + ' ' + str(self.to_.position)
+        elif self.castle_long():
+            return '0-0-0'
+        elif self.castle_short():
+            return '0-0'
         else:
             return str(self.from_.position) + ' ' + str(self.to_.position) + ' ' + self.optional
 
@@ -105,6 +75,15 @@ class Move(object):
             if mv.cmp_tuple(tuple_):
                 return mv
         return False
+
+    @staticmethod
+    def filter_moves_first(moves, first):
+        """Среди всех ходов moves возвращает tuple тех ходов, в которых ПЕРВАЯ позиция совпадает с искомой"""
+        list_ = []
+        for mv in moves:
+            if mv[0] == first:
+                list_.append(mv)
+        return tuple(list_)
 
     def capture(self):
         if self.optional == 'x':

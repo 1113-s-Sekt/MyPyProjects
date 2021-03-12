@@ -1,9 +1,11 @@
-from modules import *
+from ChessBoard import *
 
 import sys
 from PyQt5.QtWidgets import *
 from PyQt5.QtGui import *
 from PyQt5.QtCore import *
+
+gm = game_mode_classic
 
 
 class MainWindow(QWidget):
@@ -13,13 +15,12 @@ class MainWindow(QWidget):
         self.Board = Board(game_mode_fisher)
         self.Board.look_for_cells_are_attacked()
         self.Board.move_creator()
-        self.cell_active = 0
+        self.cell_active = False
+        self.moves_from_active_cell = None
         self.cells_to_move = []
         self.cells_to_passant = []
-        self.cells_to_rocky = []
         self.change = 0
-        self.ask_to_permutation = False
-        self.move_to_permutate = []
+        self.piece_to_permute = None
         self.imgEnt = QImage("Pictures/EnterFigure.png")
         self.imgMove = QImage("Pictures/MoveAvailable.png")
         self.imgAttack = QImage("Pictures/Attack.png")
@@ -31,31 +32,24 @@ class MainWindow(QWidget):
             if self.change != 0:
                 painter.drawImage(QRect(0, 0, 600, 600), chess[0])
                 for cell in self.Board.cells:
+                    cell_rectangle = QRect(cell.coord()[0] * 72 + 20, (7 - cell.coord()[1]) * 70 + 10, 72, 72)
                     if cell.piece:
-                        painter.drawImage(QRect(cell.coord()[0]*72+20, (7-cell.coord()[1])*70+10, 72, 72), cell.piece.image)
+                        painter.drawImage(cell_rectangle, cell.piece.image)
                     if cell == self.cell_active:
-                        painter.drawImage(QRect(cell.coord()[0] * 72 + 20, (7 - cell.coord()[1]) * 70 + 10, 72, 72),
-                                          self.imgEnt)
+                        painter.drawImage(cell_rectangle, self.imgEnt)
                     elif cell in self.cells_to_move:
                         if not cell.piece:
-                            painter.drawImage(QRect(cell.coord()[0] * 72 + 20, (7 - cell.coord()[1]) * 70 + 10, 72, 72),
-                                              self.imgMove)
+                            painter.drawImage(cell_rectangle, self.imgMove)
                         else:
-                            painter.drawImage(QRect(cell.coord()[0] * 72 + 20, (7 - cell.coord()[1]) * 70 + 10, 72, 72),
-                                              self.imgAttack)
+                            painter.drawImage(cell_rectangle, self.imgAttack)
                     elif cell in self.cells_to_passant:
-                        painter.drawImage(QRect(cell.coord()[0] * 72 + 20, (7 - cell.coord()[1]) * 70 + 10, 72, 72),
-                                          self.imgAttack)
-                    elif cell in self.cells_to_rocky:
-                        painter.drawImage(QRect(cell.coord()[0] * 72 + 20, (7 - cell.coord()[1]) * 70 + 10, 72, 72),
-                                          self.imgMove)
+                        painter.drawImage(cell_rectangle, self.imgAttack)
                 if self.Board.someone_in_check:
-                    for piece in self.Board.players[['White', 'Black'][self.Board.turn % 2]].pieces:
-                        if str(piece) in ['♔', '♚']:
-                            painter.drawImage(QRect(piece.coord()[0] * 72 + 20, (7 - piece.coord()[1]) * 70 + 10, 72, 72),
-                                              self.imgAttack)
+                    king = self.Board.someone_in_check
+                    cell_rectangle = QRect(king.coord()[0] * 72 + 20, (7 - king.coord()[1]) * 70 + 10, 72, 72)
+                    painter.drawImage(cell_rectangle, self.imgAttack)
                 self.change = 0
-                if self.ask_to_permutation:
+                if self.Board.permutation:
                     painter.drawImage(QRect(60, 220, 480, 160), self.imgFrame)
                     if self.Board.turn % 2 == 0:
                         painter.drawImage(QRect(92, 260, 80, 80), QImage("Pictures/wikipedia/wN.png"))
@@ -67,151 +61,82 @@ class MainWindow(QWidget):
                         painter.drawImage(QRect(204, 260, 80, 80), QImage("Pictures/wikipedia/bB.png"))
                         painter.drawImage(QRect(316, 260, 80, 80), QImage("Pictures/wikipedia/bR.png"))
                         painter.drawImage(QRect(428, 260, 80, 80), QImage("Pictures/wikipedia/bQ.png"))
-                # print("End of update")
 
     def mousePressEvent(self, event):
         if self.state == 0:
             return None
-        '''if self.Board.permutation:
-            px, py = event.pos().x(), event.pos().y()
+        px, py = event.pos().x(), event.pos().y()
+        if self.Board.permutation:
             if px in range(92, 172) and py in range(260, 340):
-                self.move_to_permutate.append('Knight')
+                self.piece_to_permute = 'Knight'
             elif px in range(204, 284) and py in range(260, 340):
-                self.move_to_permutate.append('Bishop')
+                self.piece_to_permute = 'Bishop'
             elif px in range(316, 396) and py in range(260, 340):
-                self.move_to_permutate.append('Rook')
+                self.piece_to_permute = 'Rook'
             elif px in range(428, 508) and py in range(260, 340):
-                self.move_to_permutate.append('Queen')'''
-
-        if self.ask_to_permutation:
-            px, py = event.pos().x(), event.pos().y()
-            if px in range(92, 172) and py in range(260, 340):
-                self.move_to_permutate.append('Knight')
-            elif px in range(204, 284) and py in range(260, 340):
-                self.move_to_permutate.append('Bishop')
-            elif px in range(316, 396) and py in range(260, 340):
-                self.move_to_permutate.append('Rook')
-            elif px in range(428, 508) and py in range(260, 340):
-                self.move_to_permutate.append('Queen')
-            self.Board.pawn_permutation(self.move_to_permutate)
-            self.Board.turn += 1
+                self.piece_to_permute = 'Queen'
+            self.Board.pawn_permutation(self.piece_to_permute)
             self.Board.look_for_cells_are_attacked()
             self.Board.move_creator()
-            self.move_to_permutate = []
-            self.ask_to_permutation = False
+            self.piece_to_permute = None
             self.change = 1
         else:
-            # print(event)
-            px, py = event.pos().x(), event.pos().y()
             if px in range(20, 596) and py in range(10, 570):
                 x = (px-20)//72
                 y = (py-10)//70
-                # print(x, y)
-                cellEnt = self.Board([x, 7-y])
+                cell_entered = self.Board([x, 7-y])
                 self.change = 1
-                # print(cellEnt.position())
-                # print(cellEnt.piece)
-                if self.cell_active == 0:
-                    if cellEnt.piece != 0 and cellEnt.piece.color == ['White', 'Black'][self.Board.turn % 2]:
-                        self.cell_active = cellEnt
-                        self.cells_to_move = []
-                        self.cells_to_passant = []
-                        self.cells_to_rocky = []
-                        # print(self.cell_active)
-                        for move in self.Board.players[['White', 'Black'][self.Board.turn % 2]].possible_moves: ############################### ###############################
-                            # print(move)
-                            if cellEnt.position == move[0]:
-                                cell2 = move(1)
-                                if len(move) == 3 and move[2] == 'passant' and str(cellEnt) in ['♟', '♙']:
-                                    self.cells_to_passant.append(cell2)
-                                else:
-                                    self.cells_to_move.append(cell2)
-                            if move[0] == "0-0" and str(cellEnt) in ['♔', '♚']:
-                                if self.Board.turn % 2 == 0:
-                                    self.cells_to_rocky.append(self.Board("g1"))
-                                else:
-                                    self.cells_to_rocky.append(self.Board("g8"))
-                            if move[0] == "0-0-0" and str(cellEnt) in ['♔', '♚']:
-                                if self.Board.turn % 2 == 0:
-                                    self.cells_to_rocky.append(self.Board("c1"))
-                                else:
-                                    self.cells_to_rocky.append(self.Board("c8"))
-                        # print(self.cells_to_move)
-                    else:
-                        self.cells_to_move = []
-                        self.cells_to_passant = []
-                        self.cells_to_rocky = []
-                else:
-                    if cellEnt in self.cells_to_move:
-                        if cellEnt.piece == 0:
-                            if str(self.cell_active.piece) in ['♟', '♙'] and y in [0, 7]:
-                                self.ask_to_permutation = True
-                                self.move_to_permutate = [self.cell_active.position, cellEnt.position()]
+                if not self.cell_active:
+                    if cell_entered.piece and cell_entered.piece.color == Colors[self.Board.turn % 2]:
+                        self.cell_active = cell_entered
+                        self.moves_from_active_cell = Move.filter_moves_first(
+                            self.Board.players[Colors[self.Board.turn % 2]].possible_moves,
+                            self.cell_active.position
+                        )
+                        self.cells_to_move, self.cells_to_passant = [], []
+                        for move_ in self.moves_from_active_cell:
+                            if move_.passant():
+                                self.cells_to_passant.append(move_(1))
                             else:
-                                self.Board.move([self.cell_active.position, cellEnt.position()])
-                                self.Board.look_for_cells_are_attacked()
-                                self.Board.move_creator()
-                        elif cellEnt.piece.color == ['White', 'Black'][(self.Board.turn+1) % 2]:
-                            self.Board.move([self.cell_active.position, cellEnt.position(), 'x'])
+                                self.cells_to_move.append(move_(1))
+                    else:
+                        self.cell_active = False
+                        self.moves_from_active_cell = None
+                        self.cells_to_move = []
+                        self.cells_to_passant = []
+                else:
+                    if cell_entered in self.cells_to_move or cell_entered in self.cells_to_passant:
+                        mv = Move.search_move(self.moves_from_active_cell,
+                                              (self.cell_active.position, cell_entered.position))
+                        print(mv)
+                        if mv:
+                            self.Board.move(mv)
                             self.Board.look_for_cells_are_attacked()
                             self.Board.move_creator()
-                        self.cell_active = 0
+                        self.cell_active = False
+                        self.moves_from_active_cell = None
                         self.cells_to_move = []
                         self.cells_to_passant = []
-                        self.cells_to_rocky = []
-                        if len(self.Board.players[['White', 'Black'][self.Board.turn % 2]].possible_moves) == 0:
-                            congrats(self.Board.players[['White', 'Black'][(self.Board.turn+1) % 2]])
-                    elif cellEnt in self.cells_to_passant:
-                        self.Board.move([self.cell_active.position, cellEnt.position(), "passant"])
-                        self.Board.look_for_cells_are_attacked()
-                        self.Board.move_creator()
-                        self.cell_active = 0
-                        self.cells_to_move = []
-                        self.cells_to_passant = []
-                        self.cells_to_rocky = []
-                        if len(self.Board.players[['White', 'Black'][self.Board.turn % 2]].possible_moves) == 0:
-                            congrats(self.Board.players[['White', 'Black'][(self.Board.turn+1) % 2]])
-                    elif cellEnt in self.cells_to_rocky:
-                        if cellEnt.position() in ["g1", "g8"]:
-                            self.Board.move(["0-0"])
-                        else:
-                            self.Board.move(["0-0-0"])
-                        self.Board.look_for_cells_are_attacked()
-                        self.Board.move_creator()
-                        self.cell_active = 0
-                        self.cells_to_move = []
-                        self.cells_to_passant = []
-                        self.cells_to_rocky = []
-                        if len(self.Board.players[['White', 'Black'][self.Board.turn % 2]].possible_moves) == 0:
-                            congrats(self.Board.players[['White', 'Black'][(self.Board.turn+1) % 2]])
+                        if len(self.Board.players[Colors[(self.Board.turn) % 2]].possible_moves) == 0:
+                            congrats(self.Board.players[Colors[(self.Board.turn + 1) % 2]])
                     else:
-                        if cellEnt.piece and cellEnt.piece.color == ['White', 'Black'][self.Board.turn % 2]:
-                            self.cell_active = cellEnt
-                            self.cells_to_move = []
-                            self.cells_to_passant = []
-                            self.cells_to_rocky = []
-                            for move in self.Board.players[['White', 'Black'][self.Board.turn % 2]].possible_moves:
-                                if cellEnt.position() == move[0]:
-                                    cell2 = move(1)
-                                    if len(move) == 3 and move[2] == 'passant' and str(cellEnt) in ['♟', '♙']:
-                                        self.cells_to_passant.append(cell2)
-                                    else:
-                                        self.cells_to_move.append(cell2)
-                                if move[0] == "0-0" and str(cellEnt) in ['♔', '♚']:
-                                    if self.Board.turn % 2 == 0:
-                                        self.cells_to_rocky.append(self.Board("g1"))
-                                    else:
-                                        self.cells_to_rocky.append(self.Board("g8"))
-                                if move[0] == "0-0-0" and str(cellEnt) in ['♔', '♚']:
-                                    if self.Board.turn % 2 == 0:
-                                        self.cells_to_rocky.append(self.Board("c1"))
-                                    else:
-                                        self.cells_to_rocky.append(self.Board("c8"))
+                        if cell_entered.piece and cell_entered.piece.color == Colors[self.Board.turn % 2]:
+                            self.cell_active = cell_entered
+                            self.moves_from_active_cell = Move.filter_moves_first(
+                                self.Board.players[Colors[self.Board.turn % 2]].possible_moves,
+                                self.cell_active.position
+                            )
+                            self.cells_to_move, self.cells_to_passant = [], []
+                            for move_ in self.moves_from_active_cell:
+                                if move_.passant():
+                                    self.cells_to_passant.append(move_(1))
+                                else:
+                                    self.cells_to_move.append(move_(1))
                         else:
+                            self.cell_active = False
+                            self.moves_from_active_cell = None
                             self.cells_to_move = []
                             self.cells_to_passant = []
-                            self.cells_to_rocky = []
-                            self.cell_active = 0
         self.update()
 
 
@@ -222,11 +147,12 @@ mainW = MainWindow()
 def new_game():
     mainW.state = 1
     mainW.change = 1
-    mainW.Board = Board(game_mode_fisher)
+    mainW.Board = Board(gm)
     mainW.Board.look_for_cells_are_attacked()
     mainW.Board.move_creator()
     btn1.hide()
     mainW.update()
+    print('Game starts')
 
 
 def main_menu():
@@ -236,25 +162,20 @@ def main_menu():
 
 def congrats(player):
     r = QMessageBox.question(mainW, "Congrats", str(player)+' won the Game, congratulations!', QMessageBox.Ok, QMessageBox.Ok)
+    print('Game ends')
     if r == QMessageBox.Ok:
         main_menu()
 
 
 mainW.resize(600, 600)
 mainW.setWindowTitle("Chess")
-# r = QMessageBox.question(mainW, "Congrats", ' won the Game, congratulations!', QMessageBox.Ok, QMessageBox.Ok)
 
 chess = [QImage("Pictures/ChessBoard.png")]
 print(chess)
 btn1 = QPushButton(mainW)
-print(1)
 btn1.move(200, 100)
-print(2)
 btn1.setText("New Game")
-print(3)
 btn1.clicked.connect(new_game)
-print(4)
 btn1.show()
-print(5)
 mainW.show()
 sys.exit(app.exec_())

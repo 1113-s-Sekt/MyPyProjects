@@ -25,7 +25,7 @@ class Cell(object):
         if self.piece:
             return str(self.piece)
         else:
-            return {'Black': '⬜', 'White': '⬛'}[self.color]
+            return {'Black': '▯', 'White': '▮'}[self.color]
 
     def __getitem__(self, item: int):
         return self.attacked[item]
