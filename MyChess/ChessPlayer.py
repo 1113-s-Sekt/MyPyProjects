@@ -41,7 +41,6 @@ class Player(object):
         return True
 
     def print_possible_moves(self):
-        self.possible_moves.sort()
         if len(self.possible_moves) == 0:
             print('There are no possible moves, seems like checkmate :(')
             return False

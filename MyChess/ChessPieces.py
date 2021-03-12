@@ -2,6 +2,10 @@ from ChessDescriptors import *
 
 from PyQt5.QtGui import QImage
 
+Notation = {
+    'a': 0, 'b': 1, 'c': 2, 'd': 3, 'e': 4, 'f': 5, 'g': 6, 'h': 7, 'i': 8, 'j': 9, 'k': 10        # etc.
+}
+
 
 class Piece(object):
     """Класс шахматных фигур. Обладает цветом, соответствующей фигуре клеткой на доске, ссылкой на эту доску, etc."""
@@ -37,11 +41,14 @@ class Piece(object):
         self.available_cells.intersection_update(set_to_intersect_with)
         return self.available_cells
 
+    def coord(self):
+        return [Notation[self.position[0]], int(self.position[1]) - 1]
+
 
 class Pawn(Piece):
 
     bounded = SmthOrFalseDescriptor(Piece)
-    weight = NonDataDescriptor()
+    weight = IntDescriptor()
 
     def __init__(self, color, position=None):
         super().__init__(color, position)
@@ -65,7 +72,7 @@ class Pawn(Piece):
 class Bishop(Piece):
 
     bounded = SmthOrFalseDescriptor(Piece)
-    weight = NonDataDescriptor()
+    weight = IntDescriptor()
 
     def __init__(self, color, position=None):
         super().__init__(color, position)
@@ -89,7 +96,7 @@ class Bishop(Piece):
 class Knight(Piece):
 
     bounded = SmthOrFalseDescriptor(Piece)
-    weight = NonDataDescriptor()
+    weight = IntDescriptor()
 
     def __init__(self, color, position=None):
         super().__init__(color, position)
@@ -113,7 +120,7 @@ class Knight(Piece):
 class Rook(Piece):
 
     bounded = SmthOrFalseDescriptor(Piece)
-    weight = NonDataDescriptor()
+    weight = IntDescriptor()
 
     def __init__(self, color, position=None):
         super().__init__(color, position)
@@ -137,7 +144,7 @@ class Rook(Piece):
 class Queen(Piece):
 
     bounded = SmthOrFalseDescriptor(Piece)
-    weight = NonDataDescriptor()
+    weight = IntDescriptor()
 
     def __init__(self, color, position=None):
         super().__init__(color, position)
@@ -161,7 +168,7 @@ class Queen(Piece):
 class King(Piece):
 
     in_check = SmthOrFalseDescriptor(Piece)
-    weight = NonDataDescriptor()
+    weight = IntDescriptor()
 
     def __init__(self, color, position=None):
         super().__init__(color, position)

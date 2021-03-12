@@ -1,16 +1,12 @@
 from ChessPieces import *
 
-Notation = {
-    'a': 0, 'b': 1, 'c': 2, 'd': 3, 'e': 4, 'f': 5, 'g': 6, 'h': 7, 'i': 8, 'j': 9, 'k': 10        # etc.
-}
-
 
 class Cell(object):
 
-    width = NonDataDescriptor()
+    width = IntDescriptor()
     index = IntDescriptor()
     color = ColorDescriptor()
-    piece = ChessDescriptor(Piece)
+    piece = SmthOrFalseDescriptor(Piece)
     position = PositionDescriptor()
     attacked = ChessDescriptor(int)
 
@@ -23,13 +19,13 @@ class Cell(object):
         self.attacked = [0, 0]
 
     def __repr__(self):
+        return self.position
+
+    def __str__(self):
         if self.piece:
             return str(self.piece)
         else:
             return {'Black': '⬜', 'White': '⬛'}[self.color]
-
-    def __str__(self):
-        return self.position
 
     def __getitem__(self, item: int):
         return self.attacked[item]

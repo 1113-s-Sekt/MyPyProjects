@@ -64,62 +64,77 @@ class Move(object):
             raise ValueError('Impossible move')'''
 
     def __getitem__(self, item: int):
-        if item not in (-5, -4, -3, -2, -1, 0, 1, 2, 3, 4):
+        if item not in (0, 1, 2, 3, 4):
             raise ValueError('Index out of range')
-        return {0 or -5: str(self.from_.position), 1 or -4: str(self.to_.position),
-                2 or -3: self.fig_taken, 3 or -2: self.fig_pawn,
-                4 or -1: self.fig_appeared}[item]
+        return {0: self.from_.position, 1: self.to_.position,
+                2: self.fig_taken, 3: self.fig_pawn,
+                4: self.fig_appeared}[item]
 
     def __call__(self, item):
-        if item not in (-2, -1, 0, 1):
+        if item not in (0, 1):
             raise ValueError('Index out of range')
-        return {0 or -2: self.from_.position, 1 or -1: self.to_.position}[item]
+        return {0: self.from_, 1: self.to_}[item]
 
     def __eq__(self, other):
         # большой вопрос - резонно ли вообще так сравнивать ходы?? Желательно брать ход сразу из доступных
         if other.from_.position == self.from_.position and other.to_.position == self.to_.position and \
                 other.optional == self.optional:
             return True
+        return False
+
+    def __bool__(self):
+        return True
+
+    def __repr__(self):
+        if not self.optional:
+            return str(self.from_.position) + ' ' + str(self.to_.position)
         else:
-            return False
+            return str(self.from_.position) + ' ' + str(self.to_.position) + ' ' + self.optional
 
     def cmp_tuple(self, tuple_):
         try:
             if self[0] == tuple_[0] and self[1] == tuple_[1]:
                 return True
             return False
-        finally:
+        except ValueError:
             raise ValueError(f'Impossible to compare move {self} with tuple_ {tuple_}')
+
+    @staticmethod
+    def search_move(moves, tuple_):
+        for mv in moves:
+            if mv.cmp_tuple(tuple_):
+                return mv
+        return False
 
     def capture(self):
         if self.optional == 'x':
             return True
-        else:
-            return False
+        return False
 
     def passant(self):
         if self.optional == 'passant':
             return True
-        else:
-            return False
+        return False
 
     def castle_long(self):
         if self.optional == '0-0-0':
             return True
-        else:
-            return False
+        return False
 
     def castle_short(self):
         if self.optional == '0-0':
             return True
-        else:
-            return False
+        return False
 
     def permute(self):
         if self.optional == 'permute':
             return True
-        else:
-            return False
+        return False
+
+    def common_step(self):
+        if not bool(self.optional):
+            return True
+        return False
 
 
 '''
