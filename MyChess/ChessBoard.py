@@ -1,10 +1,24 @@
 from ChessPlayer import *
-
+from stockfish import Stockfish
 
 from random import randint, choice
 
 Images = {'WhiteCell': 0, 'BlackCell': 0, 'Board': 0, 'Numbers': 0, 'Symbols': 0, 'Clocks': 0}
 Colors = ('White', 'Black')
+StockfishSettings = {
+    "Write Debug Log": "false",
+    "Contempt": 0,
+    "Min Split Depth": 10,
+    "Threads": 1,
+    "Ponder": "false",
+    "Hash": 16,
+    "MultiPV": 1,
+    "Skill Level": 20,
+    "Move Overhead": 30,
+    "Minimum Thinking Time": 500,
+    "Slow Mover": 80,
+    "UCI_Chess960": "false",
+}
 
 # Ходы записываются в формате:
 # [ ['e2', 'e4'], ['d7', 'd5'], ['e4', 'd5', 'x', 'ссылка на фигуру']... ]
@@ -54,17 +68,17 @@ Colors = ('White', 'Black')
 #       Почему для слова "клетка(поле)" используется слово "cell", а не "field" - ответа дать нельзя,
 #       потом когда-нибудь поправлю везде это слово...
 #
-#   !!! Изменения в нотации Ф.-Э.:
-#       'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w SLsl .. 0 0' - классическая партия
-#       1) Рокировки обозначаются не KQkq а SLsl (SHORT, LONG, short, long)
-#       2) Если прошлый ход не был двойной ход пешкой, то ставится не '-' а '..' для отличия от других символов в строке
-#               и фиксированной длительности задней части строки
+#   !!! Изменения в нотации Ф.-Э.: (изменения откатились)
+#       'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 0' - классическая партия
+#
+#
+#
 #
 #
 
 
 game_mode_classic = 0
-game_mode_classic_fe_notation = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w SLsl .. 0 1'
+game_mode_classic_fe_notation = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1'
 game_mode_fisher = 1
 game_mode_custom = 2
 game_mode_continue = 3
@@ -99,7 +113,7 @@ def create_fisher_pos():
     posblack[free_pos[1]] = 'n'
     posblack = ''.join(posblack)
     poswhite = posblack.upper()
-    code = posblack + '/pppppppp/8/8/8/8/PPPPPPPP/' + poswhite + ' w SLsl .. 0 1'
+    code = posblack + '/pppppppp/8/8/8/8/PPPPPPPP/' + poswhite + ' w KQkq - 0 1'
     return code
 
 
@@ -117,20 +131,22 @@ class Board(object):
     player_white = ChessDescriptor(Player)
     player_black = ChessDescriptor(Player)
 
-    def __init__(self, game_mode):
+    def __init__(self, game_mode, player1bot=False, player2bot=False):
         self.width = 8
         self.height = 8
         self.turn = 0
         self.half_turn = 0       # Полуходы - ходы без движения пешек и взятия фигур. Если >=50 то объявляется НИЧЬЯ
         self.mode = game_mode
+        self.player_is_bot = {Colors[0]: player1bot, Colors[1]: player2bot}
+        self.stock = Stockfish(parameters=StockfishSettings)
         self.castles = [False, False, False, False]     # флажки [б.кор, б.длин, ч.кор, ч.длин] True\False
         self.someone_in_check = False   # флажок Piece\False
         self.permutation = False    # флажок True\False
         self.passant = False
         self.move_list = []         # в формате [ ['e2', 'e4'], ['d7', 'd5'], ['e4', 'd5', 'x', 'ссылка на фигуру']... ]
         self.cells = [Cell(i, self.width) for i in range(self.width * self.height)]
-        self.player_white = Player([], Colors[0])
-        self.player_black = Player([], Colors[1])
+        self.player_white = Player([], Colors[0], self.player_is_bot[Colors[0]])
+        self.player_black = Player([], Colors[1], self.player_is_bot[Colors[1]])
         self.players = {Colors[0]: self.player_white, Colors[1]: self.player_black}
         self.fill_board(self.mode)
 
@@ -195,7 +211,7 @@ class Board(object):
                     if isinstance(dude, Rook):
                         if dude.turn == 0 and dude.color == clr:
                             flag = True
-                code.append({Colors[0]: 'S', Colors[1]: 's'}[clr] * int(flag) + '-' * int(flag))
+                code.append({Colors[0]: 'K', Colors[1]: 'k'}[clr] * int(flag) + '-' * int(not flag))
                 ind2 = {Colors[0]: 0, Colors[1]: 56}[clr]
                 flag = False
                 for i in range(ind2, ind1):
@@ -203,7 +219,7 @@ class Board(object):
                     if isinstance(dude, Rook):
                         if dude.turn == 0 and dude.color == clr:
                             flag = True
-                code.append({Colors[0]: 'L', Colors[1]: 'l'}[clr] * int(flag) + '-' * int(flag))
+                code.append({Colors[0]: 'Q', Colors[1]: 'q'}[clr] * int(flag) + '-' * int(not flag))
                                                                                             # =======================================================================
         if len(self.move_list) > 0:
             lmv = self.move_list[-1]            # if: 'en passant' possible - there
@@ -211,10 +227,10 @@ class Board(object):
             if abs(int(lmv[0][1]) - int(lmv[1][1])) == 2 and isinstance(cell2.piece, Pawn):
                 cll = ' ' + lmv[0][0] + str((int(lmv[0][1]) + int(lmv[1][1])) // 2)
                 code.append(cll)
-            else:                               # else: '..'
-                code.append(' ..')
+            else:                               # else: '-'
+                code.append(' -')
         else:
-            code.append(' ..')
+            code.append(' -')
         code.append(f' {self.half_turn} {self.turn // 2 + 1}')
         code = ''.join(code)
         return code
@@ -247,10 +263,18 @@ class Board(object):
                     castles.append(self.cells[index].piece)
                 index += 1
             j += 1
-        self.turn = (int(code[-1]) - 1) * 2 + {'w': 0, 'b': 1}[code[-13]]
+        if code[-5] == '-':
+            self.passant = False
+        else:
+            self.passant = self(''.join([code[-6], code[-5]]))
+        c = 0
+        if not self.passant:
+            c = 1
+        self.turn = (int(code[-1]) - 1) * 2 + {'w': 0, 'b': 1}[code[-13 + c]]
         self.half_turn = int(code[-3])
+
         for j in range(4):
-            if code[-8 - j] != '-':
+            if code[-8 - j + c] != '-':
                 self.castles[-j - 1] = castles[j]
         return True
 
@@ -280,8 +304,6 @@ class Board(object):
             code = open(save_file).read()
         elif mode == game_mode_custom:
             pass
-        self.player_white = Player([], Colors[0])
-        self.player_black = Player([], Colors[1])
         self.decryption_forsyth_edwards(code)
         wp, bp = [], []
         wk, bk = None, None
@@ -298,8 +320,8 @@ class Board(object):
                     bp.append(dude)
                     if isinstance(dude, King):
                         bk = dude
-        self.player_white = Player(wp, Colors[0])
-        self.player_black = Player(bp, Colors[1])
+        self.player_white = Player(wp, Colors[0], self.player_is_bot[Colors[0]])
+        self.player_black = Player(bp, Colors[1], self.player_is_bot[Colors[1]])
         self.player_white.king = wk
         self.player_black.king = bk
         self.players = {Colors[0]: self.player_white, Colors[1]: self.player_black}
@@ -379,15 +401,18 @@ class Board(object):
         player.add_piece(cell1.piece)
         player.remove_piece(piece1)
         self.permutation = False
+        self.turn += 1
+        self.half_turn = 0
         return True
 
     def move(self, move_):
         """Не проверяет легитимность хода, просто аппарат его совершения"""
         clr = Colors[self.turn % 2]
-        player = {0: self.player_white, 1: self.player_black}[self.turn % 2]
+        player1 = {0: self.player_white, 1: self.player_black}[self.turn % 2]
+        player2 = {0: self.player_white, 1: self.player_black}[(self.turn + 1) % 2]
         # нужно проверить равняется ли move_ хотя бы какому-то ходу в списке ходов игрока
         # ход будем сразу брать из available_moves, фильтровать ходы будем в интерфейсе
-        if move_ not in player.possible_moves:
+        if move_ not in player1.possible_moves:
             raise ValueError('move_ not in player.possible_moves')
         else:
             self.passant = False     # Сбрасываем текущую клетку для взятия на проходе
@@ -441,12 +466,32 @@ class Board(object):
             else:
                 return False
             move_(1).piece.turn += 1
-            self.turn += 1
             if isinstance(piece1, Pawn):  # Поднимаем флажок превращения пешки, потом по флажку обращаемся к интерфейсу
                 if int(piece1.position[1]) == 1 or int(piece1.position[1]) == 8:
                     move_.optional = 'permute'
                     self.permutation = True
+                    self.turn -= 1
+            self.turn += 1
             self.move_list.append(move_)
+
+    def bot_move(self):
+        self.look_for_cells_are_attacked()
+        self.move_creator()
+        code = self.encryption_forsyth_edwards()
+        self.stock.set_fen_position(code)
+        player = {0: self.player_white, 1: self.player_black}[self.turn % 2]
+        mv = self.stock.get_best_move_time(2000)
+        c1 = ''.join([mv[0], mv[1]])
+        c2 = ''.join([mv[-2], mv[-1]])
+        if mv[-1] in ('r', 'n', 'b', 'q'):
+            c2 = ''.join([mv[-3], mv[-2]])
+        best_move = (c1, c2)
+        print('Best move:', best_move)
+        print(self.stock.get_evaluation())
+        good_mv = Move.search_move(player.possible_moves, best_move)
+
+        self.move(good_mv)
+        return mv
 
     def make_check(self, attacker_, king_):
         self.someone_in_check = king_
@@ -772,6 +817,9 @@ class Board(object):
         pass
 
     def __history_forward(self, move):
+        pass
+
+    def get_str_move_list(self) -> list[str]:
         pass
 
 # _____________________________________________________________________________________________________________________

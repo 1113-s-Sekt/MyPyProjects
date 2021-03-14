@@ -5,12 +5,14 @@ class Player(object):
 
     color = ColorDescriptor()
     pieces = ChessDescriptor(Piece)
+    bot = BoolDescriptor()
     king = ChessDescriptor(King)
     possible_moves = ChessDescriptor(Move)
 
-    def __init__(self, my_pieces, color):
+    def __init__(self, my_pieces, color, i_am_bot=False):
         self.color = color
         self.pieces = set(my_pieces)
+        self.bot = i_am_bot
         self.king = None
         self.possible_moves = []
 

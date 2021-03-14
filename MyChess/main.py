@@ -6,25 +6,40 @@ from PyQt5.QtGui import *
 from PyQt5.QtCore import *
 
 gm = game_mode_classic
+thinking_time = 200
 
 
 class MainWindow(QWidget):
     def __init__(self):
         super().__init__()
         self.state = 0
-        self.Board = Board(game_mode_fisher)
-        self.Board.look_for_cells_are_attacked()
-        self.Board.move_creator()
+        self.Board = None
         self.cell_active = False
         self.moves_from_active_cell = None
         self.cells_to_move = []
         self.cells_to_passant = []
         self.change = 0
-        self.piece_to_permute = None
         self.imgEnt = QImage("Pictures/EnterFigure.png")
         self.imgMove = QImage("Pictures/MoveAvailable.png")
         self.imgAttack = QImage("Pictures/Attack.png")
         self.imgFrame = QImage("Pictures/Frame.png")
+        self.timer = QTimer()
+        self.turn0 = None
+        self.timer.timeout.connect(self.if_move_done)
+
+    def if_move_done(self):
+        if self.Board.players[Colors[self.Board.turn % 2]].bot:
+            bot_move = self.Board.bot_move()
+            self.change = 1
+            self.update()
+            if self.Board.permutation:
+                piece = {'q': 'Queen', 'r': 'Rook', 'b': 'Bishop', 'n': 'Knight'}
+                self.Board.pawn_permutation(piece[bot_move[-1]])
+            self.Board.look_for_cells_are_attacked()
+            self.Board.move_creator()
+            if len(self.Board.players[Colors[(self.Board.turn) % 2]].possible_moves) == 0:
+                congrats(self.Board.players[Colors[(self.Board.turn + 1) % 2]])
+            self.timer.stop()
 
     def paintEvent(self, event):
         painter = QPainter(self)
@@ -61,24 +76,27 @@ class MainWindow(QWidget):
                         painter.drawImage(QRect(204, 260, 80, 80), QImage("Pictures/wikipedia/bB.png"))
                         painter.drawImage(QRect(316, 260, 80, 80), QImage("Pictures/wikipedia/bR.png"))
                         painter.drawImage(QRect(428, 260, 80, 80), QImage("Pictures/wikipedia/bQ.png"))
+                self.timer.start(thinking_time)
 
     def mousePressEvent(self, event):
+        if self.Board.players[Colors[self.Board.turn % 2]].bot:
+            return None
         if self.state == 0:
             return None
         px, py = event.pos().x(), event.pos().y()
         if self.Board.permutation:
+            piece_to_permute = None
             if px in range(92, 172) and py in range(260, 340):
-                self.piece_to_permute = 'Knight'
+                piece_to_permute = 'Knight'
             elif px in range(204, 284) and py in range(260, 340):
-                self.piece_to_permute = 'Bishop'
+                piece_to_permute = 'Bishop'
             elif px in range(316, 396) and py in range(260, 340):
-                self.piece_to_permute = 'Rook'
+                piece_to_permute = 'Rook'
             elif px in range(428, 508) and py in range(260, 340):
-                self.piece_to_permute = 'Queen'
-            self.Board.pawn_permutation(self.piece_to_permute)
+                piece_to_permute = 'Queen'
+            self.Board.pawn_permutation(piece_to_permute)
             self.Board.look_for_cells_are_attacked()
             self.Board.move_creator()
-            self.piece_to_permute = None
             self.change = 1
         else:
             if px in range(20, 596) and py in range(10, 570):
@@ -110,9 +128,11 @@ class MainWindow(QWidget):
                                               (self.cell_active.position, cell_entered.position))
                         print(mv)
                         if mv:
+                            self.turn0 = self.Board.turn
                             self.Board.move(mv)
                             self.Board.look_for_cells_are_attacked()
                             self.Board.move_creator()
+                            print(self.Board.encryption_forsyth_edwards())
                         self.cell_active = False
                         self.moves_from_active_cell = None
                         self.cells_to_move = []
@@ -147,7 +167,7 @@ mainW = MainWindow()
 def new_game():
     mainW.state = 1
     mainW.change = 1
-    mainW.Board = Board(gm)
+    mainW.Board = Board(gm, player2bot=True)
     mainW.Board.look_for_cells_are_attacked()
     mainW.Board.move_creator()
     btn1.hide()
